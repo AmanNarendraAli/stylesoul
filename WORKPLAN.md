@@ -351,12 +351,15 @@ Roughly 6 phases. Each phase produces something testable end-to-end.
 - [x] CI: GitHub Actions running typecheck + tests + Prisma generate
 
 ### Phase 1 — Manual onboarding (week 2)
-- [ ] Body composition form (6 fields, RHF + Zod)
-- [ ] Body shape classifier with unit tests
-- [ ] Manual colouring form (8 / 6 / 8 selectors as visual swatch grids)
-- [ ] Colour season mapper with unit tests
-- [ ] Cinematic loading screen wired to real work
-- [ ] Profile page rendering avatar + shape + season
+- [x] Body composition form (6 fields, RHF + Zod) (completed 2026-05-14)
+- [x] Backend body measurement validation schema (6 fields, Zod) (completed 2026-05-14)
+- [x] Body shape classifier with unit tests (completed 2026-05-14)
+- [x] Manual colouring form (8 / 6 / 8 selectors as visual swatch grids) (completed 2026-05-14)
+- [x] Backend colouring options + validation schema (8 / 6 / 8 selectors, Zod) (completed 2026-05-14)
+- [x] Colour season mapper with unit tests (completed 2026-05-14)
+- [x] Cinematic loading screen wired to real work (completed 2026-05-14)
+- [x] Backend style-profile derivation + authenticated create/update/read API (`/api/profile`) (completed 2026-05-14)
+- [x] Profile page rendering avatar + shape + season (completed 2026-05-14)
 
 ### Phase 2 — Photo detection (week 3)
 - [ ] MediaPipe Face Landmarker integration
