@@ -38,13 +38,14 @@ async function run<T>(work: Promise<T> | (() => Promise<T>) | (() => T)) {
 
 export default function OnboardingAnalysingPage() {
   const router = useRouter();
-  const { draft, reset } = useOnboarding();
+  const { draft, isHydrated, reset } = useOnboarding();
   const [currentStep, setCurrentStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const hasStartedRef = useRef(false);
 
   useEffect(() => {
     if (hasStartedRef.current) return;
+    if (!isHydrated) return;
     const { body, colouring } = draft;
     if (!body) {
       router.replace("/onboarding/body");
@@ -82,7 +83,7 @@ export default function OnboardingAnalysingPage() {
             body: JSON.stringify({
               ...body,
               ...colouring,
-              detectionSource: "manual",
+              detectionSource: draft.colouringSource ?? "manual",
             }),
           });
 
@@ -101,7 +102,7 @@ export default function OnboardingAnalysingPage() {
         );
       }
     })();
-  }, [draft, router, reset]);
+  }, [draft, isHydrated, router, reset]);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-charcoal px-6 text-cream">

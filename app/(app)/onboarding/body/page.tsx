@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
@@ -32,15 +33,22 @@ const FIELDS: FieldConfig[] = [
 
 export default function OnboardingBodyPage() {
   const router = useRouter();
-  const { draft, setBody } = useOnboarding();
+  const { draft, isHydrated, setBody } = useOnboarding();
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<BodyFormInput, unknown, BodyMeasurements>({
     resolver: zodResolver(bodyMeasurementsSchema),
     defaultValues: draft.body,
   });
+
+  useEffect(() => {
+    if (isHydrated && draft.body) {
+      reset(draft.body);
+    }
+  }, [draft.body, isHydrated, reset]);
 
   const onSubmit: SubmitHandler<BodyMeasurements> = (data) => {
     setBody(data);

@@ -66,7 +66,8 @@ function testClassifiesCanonicalBodyShapeExamples() {
 function testMapsColouringToMvpSeasons() {
   assert.equal(
     mapColourSeason({
-      skinTone: "fair_warm",
+      skinTone: "fair",
+      undertone: "warm",
       eyeColour: "green",
       hairColour: "golden_blonde",
     }),
@@ -75,7 +76,8 @@ function testMapsColouringToMvpSeasons() {
 
   assert.equal(
     mapColourSeason({
-      skinTone: "medium_warm",
+      skinTone: "medium",
+      undertone: "warm",
       eyeColour: "brown",
       hairColour: "chestnut_brown",
     }),
@@ -84,7 +86,8 @@ function testMapsColouringToMvpSeasons() {
 
   assert.equal(
     mapColourSeason({
-      skinTone: "fair_cool",
+      skinTone: "fair",
+      undertone: "cool",
       eyeColour: "blue",
       hairColour: "ash_brown",
     }),
@@ -93,11 +96,22 @@ function testMapsColouringToMvpSeasons() {
 
   assert.equal(
     mapColourSeason({
-      skinTone: "deep_cool",
+      skinTone: "deep",
+      undertone: "cool",
       eyeColour: "brown",
       hairColour: "black",
     }),
     "cool_winter",
+  );
+
+  assert.equal(
+    mapColourSeason({
+      skinTone: "brown",
+      undertone: "neutral",
+      eyeColour: "hazel",
+      hairColour: "chestnut_brown",
+    }),
+    "warm_autumn",
   );
 }
 
@@ -109,7 +123,8 @@ function testValidatesAndDerivesStyleProfilePayload() {
     waistCm: "65",
     hipsCm: "90",
     shouldersCm: "92",
-    skinTone: "fair_warm",
+    skinTone: "fair",
+    undertone: "warm",
     eyeColour: "green",
     hairColour: "golden_blonde",
   });
@@ -122,6 +137,27 @@ function testValidatesAndDerivesStyleProfilePayload() {
   assert.equal(profile.analysisVersion, 1);
 }
 
+function testAcceptsPhotoCorrectedUndertonePayload() {
+  const input = styleProfileInputSchema.parse({
+    heightCm: 170,
+    bustCm: 90,
+    waistCm: 65,
+    hipsCm: 90,
+    shouldersCm: 92,
+    skinTone: "medium",
+    undertone: "warm",
+    eyeColour: "hazel",
+    hairColour: "chestnut_brown",
+    detectionSource: "photo_corrected",
+  });
+
+  const profile = deriveStyleProfile(input);
+
+  assert.equal(profile.undertone, "warm");
+  assert.equal(profile.detectionSource, "photo_corrected");
+  assert.equal(profile.colourSeason, "warm_autumn");
+}
+
 function testRejectsInvalidValues() {
   const result = styleProfileInputSchema.safeParse({
     heightCm: 80,
@@ -130,6 +166,7 @@ function testRejectsInvalidValues() {
     hipsCm: 90,
     shouldersCm: 92,
     skinTone: "purple",
+    undertone: "warm",
     eyeColour: "green",
     hairColour: "golden_blonde",
   });
@@ -140,6 +177,7 @@ function testRejectsInvalidValues() {
 testClassifiesCanonicalBodyShapeExamples();
 testMapsColouringToMvpSeasons();
 testValidatesAndDerivesStyleProfilePayload();
+testAcceptsPhotoCorrectedUndertonePayload();
 testRejectsInvalidValues();
 
 console.log("Phase 1 backend tests passed");

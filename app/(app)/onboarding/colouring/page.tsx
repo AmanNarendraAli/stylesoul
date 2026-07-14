@@ -1,79 +1,80 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { colouringSchema, type Colouring } from "@/lib/colour-season/map";
 import {
-  colouringSchema,
-  type Colouring,
-  type EyeColour,
-  type HairColour,
-  type SkinTone,
-} from "@/lib/colour-season/map";
+  eyeOptions,
+  hairOptions,
+  skinOptions,
+  undertoneOptions,
+  type ColourOption,
+} from "@/lib/colour-season/options";
+import type { DetectedColouring } from "@/lib/colour-detection/detect";
 import { Button } from "@/components/ui/button";
-import { useOnboarding } from "../OnboardingProvider";
-
-type Swatch<T extends string> = { value: T; label: string; hex: string };
-
-const SKIN_OPTIONS: Swatch<SkinTone>[] = [
-  { value: "fair_cool", label: "Fair · cool", hex: "#F2D5CB" },
-  { value: "fair_warm", label: "Fair · warm", hex: "#F3CFB1" },
-  { value: "light_neutral", label: "Light · neutral", hex: "#E6C2A1" },
-  { value: "medium_cool", label: "Medium · cool", hex: "#C99C84" },
-  { value: "medium_warm", label: "Medium · warm", hex: "#BD8458" },
-  { value: "olive", label: "Olive", hex: "#9F7C4D" },
-  { value: "deep_cool", label: "Deep · cool", hex: "#5E3B2E" },
-  { value: "deep_warm", label: "Deep · warm", hex: "#4A2A18" },
-];
-
-const EYE_OPTIONS: Swatch<EyeColour>[] = [
-  { value: "blue", label: "Blue", hex: "#6A98B7" },
-  { value: "green", label: "Green", hex: "#6F8F5C" },
-  { value: "grey", label: "Grey", hex: "#8C8E8B" },
-  { value: "hazel", label: "Hazel", hex: "#8B7150" },
-  { value: "brown", label: "Brown", hex: "#5C3E26" },
-  { value: "amber", label: "Amber", hex: "#B07E2F" },
-];
-
-const HAIR_OPTIONS: Swatch<HairColour>[] = [
-  { value: "platinum_blonde", label: "Platinum blonde", hex: "#E6D4A8" },
-  { value: "golden_blonde", label: "Golden blonde", hex: "#C9A063" },
-  { value: "ash_brown", label: "Ash brown", hex: "#6E5947" },
-  { value: "chestnut_brown", label: "Chestnut brown", hex: "#5A2E15" },
-  { value: "auburn", label: "Auburn", hex: "#893A1F" },
-  { value: "red", label: "Red", hex: "#B8442B" },
-  { value: "black", label: "Black", hex: "#1A0F0A" },
-  { value: "grey", label: "Grey", hex: "#B3AFA8" },
-];
+import { PhotoColourCapture } from "@/components/onboarding/PhotoColourCapture";
+import { useOnboarding, type DetectionSource } from "../OnboardingProvider";
 
 export default function OnboardingColouringPage() {
   const router = useRouter();
-  const { draft, setColouring } = useOnboarding();
+  const { draft, isHydrated, setColouring } = useOnboarding();
+  const detectedRef = useRef<DetectedColouring | null>(null);
+  const [showDetectedBanner, setShowDetectedBanner] = useState(false);
 
   useEffect(() => {
-    if (!draft.body) {
+    if (isHydrated && !draft.body) {
       router.replace("/onboarding/body");
     }
-  }, [draft.body, router]);
+  }, [draft.body, isHydrated, router]);
 
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<Colouring>({
     resolver: zodResolver(colouringSchema),
     defaultValues: draft.colouring,
   });
 
+  useEffect(() => {
+    if (isHydrated && draft.colouring) {
+      reset(draft.colouring);
+    }
+  }, [draft.colouring, isHydrated, reset]);
+
   const selectedSkin = watch("skinTone");
+  const selectedUndertone = watch("undertone");
   const selectedEye = watch("eyeColour");
   const selectedHair = watch("hairColour");
 
+  const handleDetected = (detected: DetectedColouring) => {
+    detectedRef.current = detected;
+    if (detected.skinTone) {
+      setValue("skinTone", detected.skinTone.value, { shouldValidate: true });
+    }
+    if (detected.undertone) {
+      setValue("undertone", detected.undertone.value, {
+        shouldValidate: true,
+      });
+    }
+    if (detected.eyeColour) {
+      setValue("eyeColour", detected.eyeColour.value, { shouldValidate: true });
+    }
+    if (detected.hairColour) {
+      setValue("hairColour", detected.hairColour.value, {
+        shouldValidate: true,
+      });
+    }
+    setShowDetectedBanner(true);
+  };
+
   const onSubmit = (data: Colouring) => {
-    setColouring(data);
+    setColouring(data, resolveSource(data, detectedRef.current));
     router.push("/onboarding/analysing");
   };
 
@@ -87,11 +88,22 @@ export default function OnboardingColouringPage() {
           you can — these drive your seasonal palette.
         </p>
 
+        <div className="mt-10">
+          <PhotoColourCapture onDetected={handleDetected} />
+        </div>
+
+        {showDetectedBanner ? (
+          <p className="mt-4 rounded border border-gold/30 bg-gold/10 p-3 text-sm text-cream">
+            We pre-filled the swatches below from your photo — change anything
+            that looks off before continuing.
+          </p>
+        ) : null}
+
         <form onSubmit={handleSubmit(onSubmit)} className="mt-12 space-y-12">
           <SwatchGroup
             title="Skin tone"
             name="skinTone"
-            options={SKIN_OPTIONS}
+            options={skinOptions}
             selected={selectedSkin}
             onSelect={(value) =>
               setValue("skinTone", value, { shouldValidate: true })
@@ -101,9 +113,21 @@ export default function OnboardingColouringPage() {
           />
 
           <SwatchGroup
+            title="Undertone"
+            name="undertone"
+            options={undertoneOptions}
+            selected={selectedUndertone}
+            onSelect={(value) =>
+              setValue("undertone", value, { shouldValidate: true })
+            }
+            register={register("undertone")}
+            error={errors.undertone?.message}
+          />
+
+          <SwatchGroup
             title="Eye colour"
             name="eyeColour"
-            options={EYE_OPTIONS}
+            options={eyeOptions}
             selected={selectedEye}
             onSelect={(value) =>
               setValue("eyeColour", value, { shouldValidate: true })
@@ -115,7 +139,7 @@ export default function OnboardingColouringPage() {
           <SwatchGroup
             title="Hair colour"
             name="hairColour"
-            options={HAIR_OPTIONS}
+            options={hairOptions}
             selected={selectedHair}
             onSelect={(value) =>
               setValue("hairColour", value, { shouldValidate: true })
@@ -142,10 +166,29 @@ export default function OnboardingColouringPage() {
   );
 }
 
+/**
+ * Derive the profile's detectionSource from how the colouring was reached:
+ * never used a photo → manual; photo detected every channel and the user kept
+ * them all → photo; otherwise (some channel undetected or edited) →
+ * photo_corrected.
+ */
+function resolveSource(
+  data: Colouring,
+  detected: DetectedColouring | null,
+): DetectionSource {
+  if (!detected) return "manual";
+  const unchanged =
+    detected.skinTone?.value === data.skinTone &&
+    detected.undertone?.value === data.undertone &&
+    detected.eyeColour?.value === data.eyeColour &&
+    detected.hairColour?.value === data.hairColour;
+  return unchanged ? "photo" : "photo_corrected";
+}
+
 type SwatchGroupProps<T extends string> = {
   title: string;
   name: string;
-  options: Swatch<T>[];
+  options: ColourOption<T>[];
   selected: T | undefined;
   onSelect: (value: T) => void;
   register: ReturnType<ReturnType<typeof useForm<Colouring>>["register"]>;

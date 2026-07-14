@@ -39,6 +39,7 @@ model StyleProfile {
   shouldersCm     Int
   bodyShape       String
   skinTone        String
+  undertone       String   @default("neutral")
   eyeColour       String
   hairColour      String
   colourSeason    String

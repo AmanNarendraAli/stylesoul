@@ -111,6 +111,7 @@ model StyleProfile {
 
   // Colouring
   skinTone        String   // one of 8 enum values
+  undertone       String   // cool | neutral | warm | olive
   eyeColour       String   // one of 6
   hairColour      String   // one of 8
   colourSeason    String   // warm_spring | warm_autumn | cool_summer | cool_winter
@@ -169,7 +170,7 @@ The MVP catalogue lives in Postgres from day one and is edited through the admin
 3. Detect a single face. If 0 or >1, fall back to manual.
 4. For each region (skin = cheek triangles, eye = iris landmarks, hair = above-forehead bbox), sample pixels from the source image.
 5. Convert to CIE Lab space; run k-means (k=2 or 3) to find the dominant colour while ignoring shadows/highlights.
-6. Map the dominant Lab colour to the **closest** preset (8 skin / 6 eye / 8 hair) by ΔE distance.
+6. Map the dominant Lab colour to the **closest** preset (8 skin / 6 eye / 8 hair) by ΔE distance, then derive a lower-confidence undertone pre-fill from the skin match.
 7. Show the user the detected values pre-filled on the manual selection screen — they can confirm or change any of them before continuing.
 
 **Why client-side first:**
@@ -210,9 +211,9 @@ These thresholds are placeholders — they need calibration against a labelled s
 
 ### 4.3 Colour season mapping
 
-**Decision:** Lookup table over (skin_tone, eye_colour, hair_colour) → season, with `undertone` (warm/cool) and `value` (light/dark) as the discriminators.
+**Decision:** Lookup table over (skin_tone, undertone, eye_colour, hair_colour) → season, with `undertone` (warm/cool/neutral/olive) and `value` (light/dark) as the discriminators.
 
-There are 8 × 6 × 8 = 384 combinations. We don't need to enumerate all of them — derive undertone from skin + hair, derive value/contrast from hair vs skin, then map to one of the 4 seasons. This logic lives in `lib/colour-season/map.ts` and is a pure function that's trivially unit-testable.
+There are 8 × 4 × 6 × 8 = 1,536 combinations. We don't need to enumerate all of them — take explicit undertone first, use skin + hair + eyes to resolve neutral/olive edge cases, derive value/contrast from hair vs skin, then map to one of the 4 seasons. This logic lives in `lib/colour-season/map.ts` and is a pure function that's trivially unit-testable.
 
 ### 4.4 Avatar — parametric React SVG
 
@@ -362,13 +363,15 @@ Roughly 6 phases. Each phase produces something testable end-to-end.
 - [x] Profile page rendering avatar + shape + season (completed 2026-05-14)
 
 ### Phase 2 — Photo detection (week 3)
-- [ ] MediaPipe Face Landmarker integration
-- [ ] Region-sampling + Lab clustering pipeline
-- [ ] ΔE-based mapping to preset options
-- [ ] Pre-fill manual screen with detected values + "we detected these — change anything?" UX
-- [ ] Cloud Vision server fallback route
-- [ ] Quality gate (face count, brightness, size)
-- [ ] Calibration: 50+ labelled samples, document accuracy
+- [x] MediaPipe Face Landmarker integration (client, lazy-loaded; completed 2026-05-21)
+- [x] Region-sampling + Lab clustering pipeline (`lib/colour-detection`, pure/unit-tested; completed 2026-05-21)
+- [x] ΔE-based mapping to preset options, including explicit undertone pre-fill (CIEDE2000; completed 2026-05-22)
+- [x] Pre-fill manual screen with detected values + "we detected these — change anything?" UX (completed 2026-05-21)
+- [x] ~~Cloud Vision~~ **self-hosted** server fallback route (`/api/analysis`; decision changed — see note below; completed 2026-05-21)
+- [x] Quality gate (face count, brightness, size) (completed 2026-05-21)
+- [~] Calibration harness scaffolded (`/calibration`, `npm run calibrate`); Hugging Face bootstrap import/predict workflow added and run 2026-05-22 (247 proxy-labelled samples). **Production threshold tuning still deferred pending self-identified 50+ labelled samples per skin tone.**
+
+> **Fallback decision (2026-05-21):** The server fallback uses the **same self-hosted Lab/ΔE pipeline**, not Cloud Vision. The client always decodes/downscales the photo locally (canvas is universal); only when in-browser landmarking is unavailable does it POST a small RGBA buffer to `/api/analysis`, which runs heuristic-region detection with no external vision API. This avoids a paid GCP dependency and aligns with the open-source-first preference. The §4.1 Cloud Vision reference is superseded.
 
 ### Phase 3 — Catalogue + recommendations (week 4)
 - [ ] `Product`, `WeeklyEdit` schema + migration

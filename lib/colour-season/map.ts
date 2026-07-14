@@ -1,14 +1,14 @@
 import { z } from "zod";
 
 export const skinTones = [
-  "fair_cool",
-  "fair_warm",
-  "light_neutral",
-  "medium_cool",
-  "medium_warm",
-  "olive",
-  "deep_cool",
-  "deep_warm",
+  "porcelain",
+  "fair",
+  "light",
+  "medium",
+  "tan",
+  "brown",
+  "deep",
+  "very_deep",
 ] as const;
 
 export const eyeColours = [
@@ -31,6 +31,8 @@ export const hairColours = [
   "grey",
 ] as const;
 
+export const undertones = ["cool", "neutral", "warm", "olive"] as const;
+
 export const colourSeasons = [
   "warm_spring",
   "warm_autumn",
@@ -41,25 +43,20 @@ export const colourSeasons = [
 export type SkinTone = (typeof skinTones)[number];
 export type EyeColour = (typeof eyeColours)[number];
 export type HairColour = (typeof hairColours)[number];
+export type Undertone = (typeof undertones)[number];
 export type ColourSeason = (typeof colourSeasons)[number];
 
 export const colouringSchema = z.object({
   skinTone: z.enum(skinTones),
+  undertone: z.enum(undertones),
   eyeColour: z.enum(eyeColours),
   hairColour: z.enum(hairColours),
 });
 
 export type Colouring = z.infer<typeof colouringSchema>;
 
-type Undertone = "warm" | "cool";
+type SeasonUndertone = "warm" | "cool";
 type Value = "light" | "dark";
-
-const warmSkinTones = new Set<SkinTone>([
-  "fair_warm",
-  "medium_warm",
-  "olive",
-  "deep_warm",
-]);
 
 const warmHairColours = new Set<HairColour>([
   "golden_blonde",
@@ -76,14 +73,19 @@ const lightHairColours = new Set<HairColour>([
 
 const lightEyeColours = new Set<EyeColour>(["blue", "green", "grey"]);
 
-function deriveUndertone({
+function deriveSeasonUndertone({
+  undertone,
   skinTone,
   hairColour,
   eyeColour,
-}: Colouring): Undertone {
+}: Colouring): SeasonUndertone {
+  if (undertone === "warm") return "warm";
+  if (undertone === "cool") return "cool";
+
   let warmth = 0;
 
-  warmth += warmSkinTones.has(skinTone) ? 2 : -2;
+  warmth += undertone === "olive" ? 2 : 0;
+  warmth += skinTone === "tan" || skinTone === "brown" ? 1 : 0;
   warmth += warmHairColours.has(hairColour) ? 1 : -1;
   warmth += eyeColour === "amber" || eyeColour === "hazel" ? 1 : 0;
 
@@ -93,8 +95,8 @@ function deriveUndertone({
 function deriveValue({ skinTone, hairColour, eyeColour }: Colouring): Value {
   let depth = 0;
 
-  depth += skinTone.startsWith("deep") ? 2 : 0;
-  depth += skinTone.startsWith("medium") || skinTone === "olive" ? 1 : 0;
+  depth += skinTone === "deep" || skinTone === "very_deep" ? 2 : 0;
+  depth += skinTone === "medium" || skinTone === "tan" || skinTone === "brown" ? 1 : 0;
   depth += lightHairColours.has(hairColour) ? -1 : 1;
   depth += lightEyeColours.has(eyeColour) ? -1 : 1;
 
@@ -102,7 +104,7 @@ function deriveValue({ skinTone, hairColour, eyeColour }: Colouring): Value {
 }
 
 export function mapColourSeason(colouring: Colouring): ColourSeason {
-  const undertone = deriveUndertone(colouring);
+  const undertone = deriveSeasonUndertone(colouring);
   const value = deriveValue(colouring);
 
   if (undertone === "warm") {

@@ -20,6 +20,10 @@ export async function signInWithEmail(formData: FormData) {
     },
   });
 
+  if (error?.code === "over_email_send_rate_limit" || error?.status === 429) {
+    redirect("/signin?error=rate_limit");
+  }
+
   if (error) {
     redirect("/signin?error=auth");
   }

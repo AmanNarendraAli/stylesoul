@@ -8,6 +8,12 @@ import {
 } from "@/components/avatar/palettes";
 import { bodyShapes, type BodyShape } from "@/lib/body-shape/classify";
 import { colourSeasons, type ColourSeason } from "@/lib/colour-season/map";
+import {
+  eyeOptions,
+  hairOptions,
+  skinOptions,
+  undertoneOptions,
+} from "@/lib/colour-season/options";
 import { prisma } from "@/lib/db/prisma";
 import { createClient } from "@/lib/supabase/server";
 
@@ -45,6 +51,12 @@ export default async function ProfilePage() {
     ["Hips", `${profile.hipsCm} cm`],
     ["Shoulders", `${profile.shouldersCm} cm`],
   ].filter(Boolean) as Array<[string, string]>;
+  const colouring: Array<[string, string]> = [
+    ["Skin tone", optionLabel(skinOptions, profile.skinTone)],
+    ["Undertone", optionLabel(undertoneOptions, profile.undertone)],
+    ["Eye colour", optionLabel(eyeOptions, profile.eyeColour)],
+    ["Hair colour", optionLabel(hairOptions, profile.hairColour)],
+  ];
 
   return (
     <main className="min-h-screen bg-charcoal px-6 py-16 text-cream">
@@ -98,6 +110,20 @@ export default async function ProfilePage() {
               </dl>
             </div>
 
+            <div>
+              <p className="text-xs uppercase tracking-[0.24em] text-cream/60">
+                Colouring
+              </p>
+              <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                {colouring.map(([label, value]) => (
+                  <div key={label} className="rounded border border-cream/10 bg-cream/[0.03] px-3 py-2">
+                    <dt className="text-cream/50">{label}</dt>
+                    <dd className="mt-1 font-semibold text-cream">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+
             <div className="flex flex-wrap gap-3 pt-2">
               <Link
                 href="/edit"
@@ -117,4 +143,11 @@ export default async function ProfilePage() {
       </section>
     </main>
   );
+}
+
+function optionLabel<T extends string>(
+  options: Array<{ value: T; label: string }>,
+  value: string,
+) {
+  return options.find((option) => option.value === value)?.label ?? value;
 }

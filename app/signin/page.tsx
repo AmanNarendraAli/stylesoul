@@ -9,6 +9,10 @@ type SignInPageProps = {
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
   const params = await searchParams;
+  const errorMessage =
+    params.error === "rate_limit"
+      ? "Too many magic links were requested. Wait a minute, then try again."
+      : "Something went wrong. Try again in a moment.";
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-charcoal px-6 text-cream">
@@ -49,7 +53,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
 
         {params.error ? (
           <p className="mt-5 rounded border border-blush/50 bg-blush/10 px-4 py-3 text-sm text-cream">
-            Something went wrong. Try again in a moment.
+            {errorMessage}
           </p>
         ) : null}
       </section>
