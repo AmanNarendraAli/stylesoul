@@ -24,11 +24,16 @@ type FieldConfig = {
 
 const FIELDS: FieldConfig[] = [
   { name: "heightCm", label: "Height (cm)", hint: "Standing height", required: true },
-  { name: "weightKg", label: "Weight (kg)", hint: "Optional — helps calibrate fit", required: false },
+  { name: "weightKg", label: "Weight (kg)", hint: "Not used for silhouette classification", required: false },
   { name: "bustCm", label: "Bust (cm)", hint: "Around the fullest part", required: true },
   { name: "waistCm", label: "Waist (cm)", hint: "Narrowest part of the torso", required: true },
   { name: "hipsCm", label: "Hips (cm)", hint: "Around the fullest part", required: true },
-  { name: "shouldersCm", label: "Shoulders (cm)", hint: "Across the back, shoulder to shoulder", required: true },
+  {
+    name: "shouldersCm",
+    label: "Shoulder width (cm)",
+    hint: "Straight across shoulder points",
+    required: true,
+  },
 ];
 
 export default function OnboardingBodyPage() {
@@ -61,8 +66,9 @@ export default function OnboardingBodyPage() {
         <p className="text-sm uppercase tracking-[0.24em] text-gold">Step 1 of 3</p>
         <h1 className="mt-3 font-display text-5xl">Body composition</h1>
         <p className="mt-4 max-w-xl text-cream/75">
-          Measure to the nearest centimetre. We use these to derive your silhouette
-          — they never leave your account.
+          Measure to the nearest centimetre. We store these in your StyleSoul
+          profile; only bust, waist, and hips drive your reduced styling
+          silhouette.
         </p>
 
         <form onSubmit={handleSubmit(onSubmit)} className="mt-10 space-y-6">

@@ -24,7 +24,8 @@ export type QualityReason =
   | "multiple_faces"
   | "too_dark"
   | "too_bright"
-  | "face_too_small";
+  | "face_too_small"
+  | "low_confidence";
 
 // Thresholds are placeholders pending calibration (see /calibration).
 const MIN_LIGHTNESS = 25; // below this, shadows dominate the skin sample

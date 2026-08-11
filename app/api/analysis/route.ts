@@ -1,4 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getAuthenticatedUserState } from "@/lib/server/auth";
+import { consumeAnalysisRateLimit } from "@/lib/server/analysis-rate-limit";
+import { AccountDeletedError } from "@/lib/server/account-lifecycle";
+import { reportServerError } from "@/lib/observability/redact";
 import {
   detectColouringHeuristic,
   type DetectedColouring,
@@ -26,9 +30,47 @@ type AnalysisRequest = {
   width: number;
   height: number;
   pixels: number[];
+  consent: true;
 };
 
+type ReadBodyResult =
+  | { ok: true; value: unknown }
+  | { ok: false; status: 400 | 413; message: string };
+
 export async function POST(request: NextRequest) {
+  const auth = await getAuthenticatedUserState();
+  if (!auth.available) {
+    return NextResponse.json(
+      { message: "Authentication unavailable" },
+      { status: 503 },
+    );
+  }
+  if (!auth.user) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
+  let rateLimit: Awaited<ReturnType<typeof consumeAnalysisRateLimit>>;
+  try {
+    rateLimit = await consumeAnalysisRateLimit(auth.user.id);
+  } catch (error) {
+    if (error instanceof AccountDeletedError) {
+      return NextResponse.json(
+        { message: "Account deletion is in progress" },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { message: "Too many photo analysis requests. Try again shortly." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+      },
+    );
+  }
+
   const contentLength = request.headers.get("content-length");
   if (
     contentLength !== null &&
@@ -37,23 +79,76 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Request body is too large" }, { status: 413 });
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ message: "Invalid JSON body" }, { status: 400 });
+  const body = await readJsonBody(request);
+  if (!body.ok) {
+    return NextResponse.json(
+      { message: body.message },
+      { status: body.status },
+    );
   }
 
-  const parsed = validate(body);
+  const parsed = validate(body.value);
   if (!parsed.ok) {
     return NextResponse.json({ message: parsed.message }, { status: 400 });
   }
 
-  const detected = detectColouringHeuristic(toPixelSource(parsed.value));
-  return NextResponse.json({ detected, source: "photo" } satisfies {
+  let detection;
+  try {
+    detection = detectColouringHeuristic(toPixelSource(parsed.value));
+  } catch (error) {
+    reportServerError("analysis_detection_failed", error);
+    return NextResponse.json(
+      { message: "Photo detection is unavailable right now" },
+      { status: 500 },
+    );
+  }
+  if (!detection.ok) {
+    return NextResponse.json(
+      {
+        message: detection.quality.message,
+        reason: detection.quality.reason,
+      },
+      { status: 422 },
+    );
+  }
+
+  return NextResponse.json({ detected: detection.detected, source: "photo" } satisfies {
     detected: DetectedColouring;
     source: "photo";
   });
+}
+
+async function readJsonBody(request: NextRequest): Promise<ReadBodyResult> {
+  const reader = request.body?.getReader();
+  if (!reader) {
+    return { ok: false, status: 400, message: "Invalid JSON body" };
+  }
+
+  const decoder = new TextDecoder();
+  let byteLength = 0;
+  let json = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    byteLength += value.byteLength;
+    if (byteLength > MAX_JSON_BYTES) {
+      await reader.cancel();
+      return {
+        ok: false,
+        status: 413,
+        message: "Request body is too large",
+      };
+    }
+    json += decoder.decode(value, { stream: true });
+  }
+  json += decoder.decode();
+
+  try {
+    return { ok: true, value: JSON.parse(json) as unknown };
+  } catch {
+    return { ok: false, status: 400, message: "Invalid JSON body" };
+  }
 }
 
 function validate(
@@ -64,7 +159,13 @@ function validate(
   if (typeof body !== "object" || body === null) {
     return { ok: false, message: "Expected an object body" };
   }
-  const { width, height, pixels } = body as Record<string, unknown>;
+  const { width, height, pixels, consent } = body as Record<string, unknown>;
+  if (consent !== true) {
+    return {
+      ok: false,
+      message: "Explicit consent is required for server photo analysis",
+    };
+  }
 
   if (!isPositiveInt(width) || !isPositiveInt(height)) {
     return { ok: false, message: "width and height must be positive integers" };
@@ -88,7 +189,10 @@ function validate(
     return { ok: false, message: "pixels must be byte values from 0 to 255" };
   }
 
-  return { ok: true, value: { width, height, pixels: pixels as number[] } };
+  return {
+    ok: true,
+    value: { width, height, pixels: pixels as number[], consent: true },
+  };
 }
 
 function toPixelSource({ width, height, pixels }: AnalysisRequest): PixelSource {

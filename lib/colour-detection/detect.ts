@@ -20,6 +20,8 @@ import {
 } from "./regions.ts";
 import { assessQuality, type QualityResult } from "./quality.ts";
 
+const MIN_CHANNEL_CONFIDENCE = 0.35;
+
 /**
  * A single detected channel: the matched preset plus a 0–1 confidence the UX
  * uses to decide how strongly to suggest it. Channels with no usable samples
@@ -61,14 +63,13 @@ export function detectColouring(
     return { ok: false, quality };
   }
 
-  return {
-    ok: true,
-    detected: detectFromSamples({
+  return gateDetectedColouring(
+    detectFromSamples({
       skin: skinSamples,
       eye: sampleEye(source, landmarks),
       hair: sampleHair(source, landmarks),
     }),
-  };
+  );
 }
 
 /**
@@ -79,10 +80,54 @@ export function detectColouring(
  */
 export function detectColouringHeuristic(
   source: PixelSource,
-): DetectedColouring {
+): DetectionResult {
   const skin = sampleBox(source, { x0: 0.35, y0: 0.4, x1: 0.65, y1: 0.7 });
   const hair = sampleBox(source, { x0: 0.3, y0: 0.02, x1: 0.7, y1: 0.15 });
-  return detectFromSamples({ skin, eye: [], hair });
+  const quality = assessQuality({
+    faceCount: 1,
+    meanLightness: meanLightness(skin),
+    faceAreaFraction: 1,
+  });
+  if (!quality.ok) {
+    return { ok: false, quality };
+  }
+
+  return gateDetectedColouring(detectFromSamples({ skin, eye: [], hair }));
+}
+
+function gateDetectedColouring(
+  detected: DetectedColouring,
+): DetectionResult {
+  const skinTone = confidentChannel(detected.skinTone);
+  if (!skinTone) {
+    return {
+      ok: false,
+      quality: {
+        ok: false,
+        reason: "low_confidence",
+        message:
+          "We couldn't confidently estimate your colouring from this photo.",
+      },
+    };
+  }
+
+  return {
+    ok: true,
+    detected: {
+      skinTone,
+      undertone: detected.undertone,
+      eyeColour: confidentChannel(detected.eyeColour),
+      hairColour: confidentChannel(detected.hairColour),
+    },
+  };
+}
+
+function confidentChannel<T extends string>(
+  channel: DetectedChannel<T> | undefined,
+): DetectedChannel<T> | undefined {
+  return channel && channel.confidence >= MIN_CHANNEL_CONFIDENCE
+    ? channel
+    : undefined;
 }
 
 /** Match each channel's dominant colour to the nearest preset. */

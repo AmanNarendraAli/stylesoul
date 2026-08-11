@@ -30,9 +30,14 @@ function minDelay(ms: number) {
 }
 
 async function run<T>(work: Promise<T> | (() => Promise<T>) | (() => T)) {
-  const value =
-    typeof work === "function" ? await Promise.resolve((work as () => T | Promise<T>)()) : await work;
-  await minDelay(MIN_STEP_DURATION_MS);
+  const workPromise =
+    typeof work === "function"
+      ? Promise.resolve().then(work as () => T | Promise<T>)
+      : work;
+  const [value] = await Promise.all([
+    workPromise,
+    minDelay(MIN_STEP_DURATION_MS),
+  ]);
   return value;
 }
 
@@ -41,17 +46,22 @@ export default function OnboardingAnalysingPage() {
   const { draft, isHydrated, reset } = useOnboarding();
   const [currentStep, setCurrentStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const hasStartedRef = useRef(false);
+  const profileSavedRef = useRef(false);
 
   useEffect(() => {
     if (hasStartedRef.current) return;
     if (!isHydrated) return;
-    const { body, colouring } = draft;
+    const { body, colouring, dimensions } = draft;
     if (!body) {
       router.replace("/onboarding/body");
       return;
     }
-    if (!colouring) {
+    // Colouring and the four drape comparisons travel together; a draft
+    // missing either (e.g. from an older key) must redo the colouring step
+    // rather than have dimensions fabricated for it.
+    if (!colouring || !dimensions) {
       router.replace("/onboarding/colouring");
       return;
     }
@@ -63,33 +73,43 @@ export default function OnboardingAnalysingPage() {
         await run(() => classifyBodyShape(body));
 
         setCurrentStep(1);
-        await run(() => mapColourSeason(colouring));
+        await run(() => mapColourSeason(colouring, dimensions));
 
         setCurrentStep(2);
-        await run(async () => {
-          await import("@/components/avatar/Avatar");
-        });
+        await run(() => import("@/components/avatar/Avatar"));
 
         setCurrentStep(3);
-        // Phase 3 will wire this to the weekly-edit query. For Phase 1, hold
-        // the cinematic beat without a real fetch.
-        await run(() => undefined);
+        await run(async () => {
+          if (!profileSavedRef.current) {
+            const profileResponse = await fetch("/api/profile", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                ...body,
+                ...colouring,
+                ...dimensions,
+                detectionSource: draft.colouringSource ?? "manual",
+              }),
+            });
+            if (!profileResponse.ok) {
+              const payload = await profileResponse.json().catch(() => ({}));
+              throw new Error(payload?.message ?? "Failed to save profile");
+            }
+            profileSavedRef.current = true;
+          }
+
+          const editResponse = await fetch("/api/recs/weekly");
+          if (!editResponse.ok) {
+            const payload = await editResponse.json().catch(() => ({}));
+            throw new Error(payload?.message ?? "Failed to curate weekly edit");
+          }
+        });
 
         setCurrentStep(4);
         await run(async () => {
-          const response = await fetch("/api/profile", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              ...body,
-              ...colouring,
-              detectionSource: draft.colouringSource ?? "manual",
-            }),
-          });
-
+          const response = await fetch("/api/profile");
           if (!response.ok) {
-            const payload = await response.json().catch(() => ({}));
-            throw new Error(payload?.message ?? "Failed to save profile");
+            throw new Error("Failed to confirm style profile");
           }
         });
 
@@ -102,7 +122,7 @@ export default function OnboardingAnalysingPage() {
         );
       }
     })();
-  }, [draft, isHydrated, router, reset]);
+  }, [attempt, draft, isHydrated, router, reset]);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-charcoal px-6 text-cream">
@@ -129,22 +149,23 @@ export default function OnboardingAnalysingPage() {
             return (
               <li
                 key={step.key}
+                aria-current={status === "active" ? "step" : undefined}
                 className="flex items-center gap-3 text-sm"
               >
                 <StepIcon status={status} />
                 <AnimatePresence mode="wait">
                   <motion.span
                     key={status}
-                    initial={{ opacity: 0, x: -4 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 4 }}
+                    initial={{ x: -4 }}
+                    animate={{ x: 0 }}
+                    exit={{ x: 4 }}
                     transition={{ duration: 0.2 }}
                     className={
                       status === "done"
                         ? "text-cream"
                         : status === "active"
                           ? "text-cream"
-                          : "text-cream/45"
+                          : "text-cream/60"
                     }
                   >
                     {step.label}
@@ -156,15 +177,29 @@ export default function OnboardingAnalysingPage() {
         </ol>
 
         {error ? (
-          <div className="mt-10 rounded border border-blush/40 bg-blush/10 p-4 text-sm text-cream">
+          <div role="alert" className="mt-10 rounded border border-blush/40 bg-blush/10 p-4 text-sm text-cream">
             <p>{error}</p>
-            <button
-              type="button"
-              onClick={() => router.push("/onboarding/body")}
-              className="mt-3 text-gold underline"
-            >
-              Start over
-            </button>
+            <div className="mt-3 flex justify-center gap-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setCurrentStep(0);
+                  hasStartedRef.current = false;
+                  setAttempt((value) => value + 1);
+                }}
+                className="min-h-11 min-w-11 rounded text-gold underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+              >
+                Retry
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push("/onboarding/body")}
+                className="min-h-11 min-w-11 rounded text-cream/75 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+              >
+                Start over
+              </button>
+            </div>
           </div>
         ) : null}
 

@@ -37,7 +37,10 @@ export type PhotoDetectionOutcome =
  * fall back to the self-hosted server route. Any hard failure resolves to a
  * non-ok outcome so the caller can route the user to the manual screen.
  */
-export async function detectFromPhoto(file: File): Promise<PhotoDetectionOutcome> {
+export async function detectFromPhoto(
+  file: File,
+  getServerFallbackConsent: () => boolean = () => false,
+): Promise<PhotoDetectionOutcome> {
   let imageData: ImageData;
   try {
     imageData = await decodeToImageData(file, CLIENT_MAX_EDGE);
@@ -62,34 +65,43 @@ export async function detectFromPhoto(file: File): Promise<PhotoDetectionOutcome
     }
     return { ok: true, detected: detection.detected, source: "photo" };
   } catch {
-    // Landmarking failed — try the server fallback before giving up.
-    return detectViaServerFallback(file);
+    if (!getServerFallbackConsent()) {
+      return {
+        ok: false,
+        kind: "fallback",
+        message:
+          "On-device photo detection is unavailable. Enable server fallback or choose your swatches manually.",
+      };
+    }
+    return detectViaServerFallback(file, getServerFallbackConsent);
   }
 }
 
 async function detectViaServerFallback(
   file: File,
+  getServerFallbackConsent: () => boolean,
 ): Promise<PhotoDetectionOutcome> {
   try {
     const small = await decodeToImageData(file, FALLBACK_MAX_EDGE);
+    if (!getServerFallbackConsent()) {
+      return {
+        ok: false,
+        kind: "fallback",
+        message:
+          "Server fallback was not used because consent is off. Choose your swatches manually.",
+      };
+    }
     const response = await fetch("/api/analysis", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        consent: true,
         width: small.width,
         height: small.height,
         pixels: Array.from(small.data),
       }),
     });
-    if (!response.ok) {
-      return {
-        ok: false,
-        kind: "fallback",
-        message: "Photo detection is unavailable right now.",
-      };
-    }
-    const payload = (await response.json()) as { detected: DetectedColouring };
-    return { ok: true, detected: payload.detected, source: "photo" };
+    return readFallbackResponse(response);
   } catch {
     return {
       ok: false,
@@ -97,6 +109,34 @@ async function detectViaServerFallback(
       message: "Photo detection is unavailable right now.",
     };
   }
+}
+
+export async function readFallbackResponse(
+  response: Response,
+): Promise<PhotoDetectionOutcome> {
+  if (response.ok) {
+    const payload = (await response.json()) as { detected: DetectedColouring };
+    return { ok: true, detected: payload.detected, source: "photo" };
+  }
+
+  if (response.status === 422) {
+    const payload = (await response.json().catch(() => null)) as {
+      message?: string;
+    } | null;
+    return {
+      ok: false,
+      kind: "quality",
+      message:
+        payload?.message ??
+        "We couldn't confidently estimate your colouring from this photo.",
+    };
+  }
+
+  return {
+    ok: false,
+    kind: "fallback",
+    message: "Photo detection is unavailable right now.",
+  };
 }
 
 // --- canvas helpers -------------------------------------------------------

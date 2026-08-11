@@ -18,7 +18,10 @@ import {
   faceAreaFraction,
   meanLightness,
 } from "../lib/colour-detection/regions.ts";
-import { detectFromSamples } from "../lib/colour-detection/detect.ts";
+import {
+  detectColouring,
+  detectFromSamples,
+} from "../lib/colour-detection/detect.ts";
 import { skinOptions } from "../lib/colour-season/options.ts";
 
 function approx(actual: number, expected: number, tol: number, label: string) {
@@ -161,6 +164,30 @@ function testDetectFromSamplesRecoversPreset() {
   assert.equal(detected.hairColour, undefined);
 }
 
+function testPrimaryDetectionRejectsLowConfidenceMatches() {
+  const landmarks = Array.from({ length: 478 }, () => ({ x: 0.5, y: 0.5 }));
+  landmarks[0] = { x: 0.2, y: 0.2 };
+  landmarks[1] = { x: 0.8, y: 0.8 };
+  landmarks[10] = { x: 0.5, y: 0.35 };
+  landmarks[152] = { x: 0.5, y: 0.75 };
+
+  const result = detectColouring(
+    {
+      width: 100,
+      height: 100,
+      getPixel: () => ({ r: 0, g: 90, b: 255 }),
+    },
+    landmarks,
+    1,
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(
+    result.ok ? undefined : result.quality.reason,
+    "low_confidence",
+  );
+}
+
 function testRegionMetrics() {
   approx(meanLightness([{ l: 40, a: 0, b: 0 }, { l: 60, a: 0, b: 0 }]), 50, 1e-9, "meanLightness");
   assert.equal(meanLightness([]), 0);
@@ -180,6 +207,7 @@ const tests = [
   testClusteringIgnoresOutliers,
   testQualityGate,
   testDetectFromSamplesRecoversPreset,
+  testPrimaryDetectionRejectsLowConfidenceMatches,
   testRegionMetrics,
 ];
 

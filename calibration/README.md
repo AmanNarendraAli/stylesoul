@@ -3,7 +3,7 @@
 The photo-detection ΔE thresholds and quality gates in `lib/colour-detection`
 ship with **placeholder values**. This directory is the harness for tuning them
 against real, labelled photos. Tuning itself is deferred until a labelled set
-exists — see WORKPLAN §5, Phase 2 item 7.
+exists — see WORKPLAN §5, Phase 5 photo-calibration item.
 
 ## Why this is gated on data
 
@@ -103,3 +103,17 @@ client path by itself.
 - Decision: do not tune `MAX_USEFUL_DELTA_E` or quality gates from this run.
   The combination of proxy labels, incomplete undertone coverage, and
   landmark-free sampling is too weak for production thresholds.
+
+
+### 2026-07-14 — Launch decision: photo suggestions remain experimental
+
+- Self-identified, consented StyleSoul samples available: 0. The proxy Flickr
+  bootstrap set is not a substitute for the required ground truth.
+- Accuracy and coverage cannot be published honestly, so no production
+  confidence threshold is claimed or locked. `MAX_USEFUL_DELTA_E` and the
+  quality bounds remain unchanged placeholder values.
+- The web UI labels photo matching as experimental, requires users to review
+  every suggested swatch, and keeps manual selection as the canonical path.
+- Production calibration remains gated on the documented consented 50+ samples
+  per skin tone; until then, photo output must not be described as accurate or
+  production-calibrated.

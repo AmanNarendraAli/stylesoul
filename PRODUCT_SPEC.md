@@ -1,11 +1,12 @@
 # StyleSoul — Product Specification
 
 **Tagline:** Your Personal Style Intelligence
-**Pricing:** £9.99 / month (Free Trial available)
+**Pricing:** Deferred. The current web MVP has no checkout, trial, subscription, or payment collection.
 **Positioning:** A lifelong fashion compass, built around the individual user.
-**Target audience (v1):** Womenswear. Avatar geometry, body shape archetypes, colour seasons, and the curated edit are all designed for women. Menswear / unisex are out of scope for now.
+**Platform:** Responsive web. Native mobile is a post-MVP workstream.
+**Target audience (MVP):** Womenswear. Avatar geometry, body-shape archetypes, colour seasons, and the curated edit are designed for women. Menswear and unisex recommendations are out of scope.
 
-StyleSoul builds a complete, personalised style profile from body measurements and natural colouring, then delivers an avatar, a curated weekly shopping edit, and social shopping tools.
+StyleSoul builds a personalised style profile from body measurements and natural colouring, then presents an abstract avatar and a three-product weekly shopping edit with direct retailer links.
 
 ---
 
@@ -15,9 +16,9 @@ StyleSoul produces a personalised style profile in three steps:
 
 | Step | Name | Inputs | Output |
 |------|------|--------|--------|
-| 01 | Body Composition | Height, bust, waist, hips, shoulders | Body shape archetype |
-| 02 | Natural Colouring | Skin tone, eye colour, hair colour | Seasonal colour palette |
-| 03 | Avatar & Profile | (Derived from steps 01 & 02) | Personalised avatar + complete style DNA (shape, season, silhouette guide) |
+| 01 | Body Composition | Height, bust, waist, hips, shoulder width; weight optional | Provisional body-shape silhouette |
+| 02 | Natural Colouring | Skin tone, undertone, eye colour, hair colour | Seasonal colour palette |
+| 03 | Avatar & Profile | Derived from steps 01 and 02 | Personalised avatar and current style profile |
 
 The output of the three steps is a single "style DNA" used to drive every downstream recommendation.
 
@@ -25,17 +26,17 @@ The output of the three steps is a single "style DNA" used to drive every downst
 
 ## 2. Feature 01 — Body Composition Analysis
 
-Users input six measurements; an algorithm classifies them into one of five body shape archetypes. This forms the foundation of the style profile.
+Users provide five required measurements and may add weight. The current deterministic heuristic classifies bust, waist, hips, and shoulder-to-shoulder width into one of five body-shape archetypes. Height and optional weight are stored in the profile but do not affect that classification.
 
-### Inputs (6 measurements)
-- Height
-- Weight
-- Bust
-- Waist
-- Hips
-- Shoulders
+### Inputs
+- Height — required profile measurement; not used by the current classifier
+- Weight — optional; not used by the current classifier
+- Bust — required circumference
+- Waist — required circumference
+- Hips — required circumference
+- Shoulder width — required straight-line distance from one shoulder point to the other
 
-> Note: The intro deck mentions "six measurements" but the "How It Works" overview lists five (omitting weight). Treat all six as inputs; weight is captured but the archetype classification is driven primarily by the bust/waist/hips/shoulders ratio plus height.
+The 5% / 0.75 / 0.95 ratios and 2.25 shoulder-width conversion are provisional product heuristics, not population-calibrated health or anatomy claims. The UI presents the result as a styling silhouette, not a verdict.
 
 ### Body Shape Archetypes (5)
 
@@ -51,12 +52,15 @@ Users input six measurements; an algorithm classifies them into one of five body
 
 ## 3. Feature 02 — Seasonal Colour Profiling
 
-User selects from a fixed set of natural colouring options; the system maps them to one of four colour seasons, each with its own personalised palette.
+The user explicitly selects from fixed natural-colouring options. The system maps the four selections to one of four colour seasons.
 
 ### Inputs
 - Skin tone — 8 options
+- Undertone — 4 options
 - Eye colour — 6 options
 - Hair colour — 8 options
+
+Optional photo suggestions are experimental and uncalibrated. Manual swatches remain canonical; every suggestion must be reviewed, and server fallback requires explicit consent.
 
 ### Colour Seasons (4)
 
@@ -73,13 +77,13 @@ Each season exposes a curated colour palette (visualised as colour swatches in t
 
 ## 4. Feature 03 — Personal Style Avatar
 
-A unique SVG avatar is generated from the user's body shape and colour season. Every recommendation surfaced by the product is rendered on the user's avatar first, so the user sees clothing on a figure that matches their own shape and palette.
+An abstract SVG avatar is generated from the user's body-shape silhouette and colour season. Recommendation cards show the avatar as a profile reference; the MVP does not render garments onto the figure or claim virtual try-on.
 
 ### Avatar Requirements
-- **Shape-accurate silhouette** — geometry derived from the body shape archetype.
-- **Season-matched colour palette** — fills/accents pulled from the user's colour season.
-- **Animated pulse indicator** — visual confirmation the avatar is "live" / linked to the active profile.
-- **Updates with every new analysis** — re-runs of body or colour analysis regenerate the avatar.
+- **Shape-linked silhouette** — geometry derived from the current body-shape archetype.
+- **Season-matched colour palette** — fills and accents pulled from the user's colour season.
+- **Animated pulse indicator** — visual confirmation that the avatar is linked to the active profile.
+- **Updates with every analysis** — re-analysis replaces the current profile and increments its analysis version.
 
 ### Display Metadata
 The avatar surface displays the user's current Body Shape (e.g. *Hourglass*) and Colour Season (e.g. *Warm Spring*) alongside a swatch row of the season's signature colours.
@@ -88,23 +92,14 @@ The avatar surface displays the user's current Body Shape (e.g. *Hourglass*) and
 
 ## 5. Feature 04 — Weekly Curated Recommendations
 
-Each week the user receives three hand-picked items matched to their body shape and colour season. Each item is offered across multiple brands at multiple price points, with one-tap sale tracking per brand.
+Each weekly edit targets three distinct active products. Selection prioritises fresh products matching both body shape and colour season, then relaxes history, eligibility, and finally brand-diversity constraints when a catalogue pool is thin. The current curated catalogue keeps every strict shape/season bucket above the three-product requirement.
 
-### Card Structure (per item)
-- **Item name** (e.g. Wrap Midi Dress)
-- **Colour + occasion tags** (e.g. Sage Green · Work & Weekends)
-- **Brand list** — multiple brands with prices, ordered by price; the highlighted brand is the primary recommendation
+### Card Structure (per product)
+- Product image, brand, title, price, garment category, and price tier
+- Small avatar overlay as a silhouette/palette reference
+- One direct HTTPS link to the retailer product page
 
-### Example Edit (from deck)
-
-| Item | Colour · Occasion | Brand Options |
-|------|-------------------|---------------|
-| Wrap Midi Dress | Sage Green · Work & Weekends | & Other Stories £89 (primary) · Reformation £178 · ASOS £42 |
-| Wide-Leg Trousers | Warm Camel · Office & Evenings | Massimo Dutti £79 (primary) · Zara £49 · M&S £35 |
-| Fitted Blazer | Dusty Rose · Formal & Smart Casual | COS £145 (primary) · Reiss £195 · River Island £65 |
-
-### Sale Alerts
-Tapping any brand entry activates a sale alert for that item at that brand. Members are notified the moment prices drop.
+The MVP has no garment-concept equivalence layer, multi-brand offers, price tracking, sale alerts, affiliate redirect, or commission attribution. The curated catalogue is maintained directly in StyleSoul; live ingestion and affiliate partnerships require separate approval.
 
 ---
 
@@ -112,45 +107,37 @@ Tapping any brand entry activates a sale alert for that item at that brand. Memb
 
 After data entry, the app runs a cinematic loading sequence so the analysis feels premium and ceremonial rather than transactional.
 
-### Sequence (header: "Crafting Your Style Profile")
+### Sequence (screen: "Building your style profile")
 1. ✓ Calculating body proportions…
 2. ✓ Mapping colour season…
 3. ✓ Generating avatar…
 4. *Curating silhouettes…* (in-progress state)
 5. Building your style profile… (queued state)
 
-A horizontal progress bar tracks overall completion. Each step transitions from queued → in-progress (italic with active marker) → complete (✓).
+An ordered status list moves each step from pending to active to complete before the profile page opens.
 
 ---
 
-## 7. Feature 06 — Shop with Friends Experience
+## 7. Deferred — Shop with Friends
 
-Users can share their recommendations with friends to gather opinions before buying.
-
-### Capabilities ("Is it a Yes?" panel)
-- Share recommendations with friends
-- Receive thumbs up / thumbs down votes from friends
-- Set discount alerts on shared items
-- Create a wishlist that doubles as a gift-ideas list (in-progress state in deck)
-- Track style preferences over time (queued state in deck)
-
-The last two items are presented as upcoming/in-progress capabilities in the same visual style as Feature 05's sequence.
+Sharing, voting, discount alerts, wishlists, gift ideas, and preference tracking are post-MVP capabilities. They are not exposed in the current web app and must not be described as available.
 
 ---
 
-## 8. Membership & Pricing
+## 8. Access, Monetisation & Data Handling
 
-- **Plan:** Single tier — £9.99 / month
-- **Trial:** Free trial available before the first charge
-- **Privacy commitment:** User data is private and never shared
+- **Current access:** Authenticated web MVP, available for testing without charge.
+- **Payments:** Pricing, trials, subscriptions, checkout, customer portal, and payment-provider selection are deferred pending explicit approval.
+- **Retail links:** Direct HTTPS links only. Affiliate partnerships and tracking are not active.
+- **Profile data:** Authentication and profile/catalogue data use Supabase infrastructure. Hosting and database providers act as processors as described on the legal page.
+- **Photo data:** On-device analysis is preferred. With explicit consent, an in-memory downscaled pixel buffer may be processed by the StyleSoul server fallback and is discarded after the request; original photos and pixel buffers are not persisted.
 
-### Member Benefits Recap (from "Join StyleSoul")
-- Body composition & silhouette analysis
-- Seasonal colour profiling (4 archetypes)
-- Personalised style avatar
-- Weekly curated shopping edit
-- Sale alerts for tracked brands
-- Immersive analysis experience
+### Current User Benefits
+- Body measurement and provisional silhouette analysis
+- Manual seasonal colour profiling with explicit undertone
+- Optional experimental photo suggestions with manual review
+- Personalised abstract avatar
+- Stable three-product weekly edit with direct retailer links
 
 ---
 
@@ -165,12 +152,13 @@ Derived from the deck's design language:
 
 ---
 
-## 10. Open Questions / To Confirm
+## 10. Resolved Scope & Deferred Decisions
 
-1. **Six vs five measurements** — confirm whether weight is a required input or only used for refinement; the overview slide lists five inputs, the feature detail lists six.
-2. **Recommendation sourcing** — whether weekly edits are human-curated, algorithmically generated, or hybrid.
-3. **Sale alert mechanism** — push, email, or in-app only; latency target after a price drop.
-4. **Friend sharing surface** — whether shares are link-based (works for non-members) or require both parties to be StyleSoul members.
-5. **Wishlist & preference tracking** — these are shown as in-progress in the deck; confirm scope for v1 launch vs follow-up.
-6. **Re-analysis cadence** — how often users can re-run body/colour analysis and whether prior profiles are versioned.
-7. **Size range** — confirm the size range supported within the womenswear scope (e.g. UK 4–24, petite/tall variants).
+1. **Measurements** — height, bust, waist, hips, and shoulder width are required; weight is optional. Bust, waist, and hips are circumferences; shoulder width is a straight-line distance. The classifier converts shoulder width to a provisional comparable scale before applying the shoulder-dominance rule.
+2. **Recommendation sourcing** — the MVP uses a hand-curated catalogue and deterministic weekly selection.
+3. **Monetisation** — pricing, trials, subscriptions, provider choice, and affiliate partnerships require explicit post-MVP approval.
+4. **Sale alerts and social shopping** — alerts, sharing, voting, wishlists, and preference tracking are post-MVP.
+5. **Re-analysis** — users may re-run analysis; the current profile is replaced and its version increments. Profile history is deferred.
+6. **Platform** — supported responsive web is in scope; native mobile UI and low-end native optimisation are post-MVP.
+7. **Catalogue links** — current cards use one direct retailer link per product. Multi-brand equivalents and live ingestion are deferred.
+8. **Size range** — catalogue items are not filtered by a declared size range in the MVP; add size eligibility only with verified retailer data.

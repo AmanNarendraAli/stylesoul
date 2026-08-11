@@ -1,17 +1,17 @@
-import { signInWithEmail } from "./actions";
+import Link from "next/link";
+import { signInWithGoogle } from "./actions";
 
 type SignInPageProps = {
   searchParams: Promise<{
     error?: string;
-    sent?: string;
   }>;
 };
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
   const params = await searchParams;
   const errorMessage =
-    params.error === "rate_limit"
-      ? "Too many magic links were requested. Wait a minute, then try again."
+    params.error === "oauth"
+      ? "Google sign-in could not be completed. Try again."
       : "Something went wrong. Try again in a moment.";
 
   return (
@@ -22,37 +22,30 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
         </p>
         <h1 className="mt-4 font-display text-5xl">Sign in</h1>
         <p className="mt-4 text-cream/75">
-          Enter your email and we&apos;ll send you a magic link.
+          Continue securely with your Google account.
         </p>
 
-        <form action={signInWithEmail} className="mt-8 space-y-4">
-          <label className="block text-sm text-cream/80" htmlFor="email">
-            Email
-          </label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            required
-            className="w-full rounded border border-cream/20 bg-cream/5 px-4 py-3 text-cream outline-none transition focus:border-gold"
-            placeholder="you@example.com"
-          />
+        <form action={signInWithGoogle} className="mt-8">
           <button
             type="submit"
-            className="w-full rounded bg-gold px-5 py-3 text-sm font-semibold text-charcoal transition hover:bg-cream"
+            className="min-h-11 w-full rounded bg-gold px-5 py-3 text-sm font-semibold text-charcoal transition hover:bg-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
           >
-            Send magic link
+            Continue with Google
           </button>
         </form>
-
-        {params.sent ? (
-          <p className="mt-5 rounded border border-sage/50 bg-sage/10 px-4 py-3 text-sm text-cream">
-            Check your email for the sign-in link.
-          </p>
-        ) : null}
+        <p className="mt-5 text-xs leading-5 text-cream/60">
+          Before using the preview, read the{" "}
+          <Link
+            href="/legal"
+            className="text-gold underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+          >
+            privacy policy and terms
+          </Link>
+          .
+        </p>
 
         {params.error ? (
-          <p className="mt-5 rounded border border-blush/50 bg-blush/10 px-4 py-3 text-sm text-cream">
+          <p role="alert" className="mt-5 rounded border border-blush/50 bg-blush/10 px-4 py-3 text-sm text-cream">
             {errorMessage}
           </p>
         ) : null}

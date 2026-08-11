@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/db/prisma";
+import { hasStyleProfile } from "@/lib/server/profile";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function OnboardingEntryPage() {
@@ -12,12 +12,9 @@ export default async function OnboardingEntryPage() {
     redirect("/signin");
   }
 
-  const profile = await prisma.styleProfile.findUnique({
-    where: { userId: user.id },
-    select: { id: true },
-  });
+  const hasProfile = await hasStyleProfile(user.id);
 
-  if (profile) {
+  if (hasProfile) {
     redirect("/profile");
   }
 

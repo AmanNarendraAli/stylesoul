@@ -1,0 +1,15 @@
+.env*
+!.env.example
+.next/
+node_modules/
+coverage/
+dist/
+*.tsbuildinfo
+
+# Calibration data is sensitive (face photos + self-identified labels).
+# Only the example/template files are tracked.
+calibration/samples/
+calibration/labels.csv
+calibration/predictions.json
+calibration/prediction-details.json
+calibration/hf-flickr-summary.json

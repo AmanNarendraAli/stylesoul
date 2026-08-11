@@ -1,21 +1,29 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { prisma } from "@/lib/db/prisma";
-import { createClient } from "@/lib/supabase/server";
 import {
-  deriveStyleProfile,
   styleProfileInputSchema,
 } from "@/lib/style-profile/schema";
+import {
+  findStyleProfile,
+  saveStyleProfile,
+} from "@/lib/server/profile";
+import { getAuthenticatedUserState } from "@/lib/server/auth";
+import { AccountDeletedError } from "@/lib/server/account-lifecycle";
+import { recordFunnelEvent } from "@/lib/server/funnel";
 
 export async function GET() {
-  const user = await getAuthenticatedUser();
-
+  const auth = await getAuthenticatedUserState();
+  if (!auth.available) {
+    return NextResponse.json(
+      { message: "Authentication unavailable" },
+      { status: 503 },
+    );
+  }
+  const { user } = auth;
   if (!user) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
-  const profile = await prisma.styleProfile.findUnique({
-    where: { userId: user.id },
-  });
+  const profile = await findStyleProfile(user.id);
 
   if (!profile) {
     return NextResponse.json({ message: "Profile not found" }, { status: 404 });
@@ -25,8 +33,14 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getAuthenticatedUser();
-
+  const auth = await getAuthenticatedUserState();
+  if (!auth.available) {
+    return NextResponse.json(
+      { message: "Authentication unavailable" },
+      { status: 503 },
+    );
+  }
+  const { user } = auth;
   if (!user) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
@@ -38,7 +52,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const payload = await request.json();
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch {
+    return NextResponse.json({ message: "Invalid JSON" }, { status: 400 });
+  }
+
   const parsed = styleProfileInputSchema.safeParse(payload);
 
   if (!parsed.success) {
@@ -48,36 +68,27 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const profileData = deriveStyleProfile(parsed.data);
-
-  await prisma.user.upsert({
-    where: { id: user.id },
-    create: {
-      id: user.id,
-      email: user.email,
-    },
-    update: {
-      email: user.email,
-    },
-  });
-
-  const profile = await prisma.styleProfile.upsert({
-    where: { userId: user.id },
-    create: {
+  try {
+    const profile = await saveStyleProfile({
       userId: user.id,
-      ...profileData,
-    },
-    update: profileData,
-  });
+      email: user.email,
+      input: parsed.data,
+    });
+    await recordFunnelEvent({
+      userId: user.id,
+      name: "analysis_complete",
+      occurredAt: profile.createdAt,
+    });
 
-  return NextResponse.json({ profile });
+    return NextResponse.json({ profile });
+  } catch (error) {
+    if (error instanceof AccountDeletedError) {
+      return NextResponse.json(
+        { message: "Account deletion is in progress" },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
 }
 
-async function getAuthenticatedUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  return user;
-}

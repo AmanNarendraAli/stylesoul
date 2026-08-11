@@ -8,26 +8,68 @@ import {
   useMemo,
   useState,
 } from "react";
-import type { BodyMeasurements } from "@/lib/body-shape/classify";
-import type { Colouring } from "@/lib/colour-season/map";
-import type { detectionSources } from "@/lib/style-profile/schema";
-
-const DRAFT_STORAGE_KEY = "stylesoul.onboardingDraft.v3";
+import {
+  bodyMeasurementsSchema,
+  type BodyMeasurements,
+} from "@/lib/body-shape/classify";
+import {
+  colouringSchema,
+  seasonDimensionsSchema,
+  type Colouring,
+  type SeasonDimensions,
+} from "@/lib/colour-season/map";
+import { detectionSources } from "@/lib/style-profile/schema";
+import { ONBOARDING_DRAFT_STORAGE_KEY as DRAFT_STORAGE_KEY } from "@/lib/onboarding-draft";
 
 export type DetectionSource = (typeof detectionSources)[number];
 
 export type OnboardingDraft = {
   body?: BodyMeasurements;
   colouring?: Colouring;
+  /** The four confirmed drape comparisons; required to map a season. */
+  dimensions?: SeasonDimensions;
   /** How the colouring was obtained — drives the profile's detectionSource. */
   colouringSource?: DetectionSource;
 };
+
+function parseStoredDraft(stored: string): OnboardingDraft {
+  const candidate: unknown = JSON.parse(stored);
+  if (
+    typeof candidate !== "object" ||
+    candidate === null ||
+    Array.isArray(candidate)
+  ) {
+    return {};
+  }
+
+  const values = candidate as Record<string, unknown>;
+  const body = bodyMeasurementsSchema.safeParse(values.body);
+  const colouring = colouringSchema.safeParse(values.colouring);
+  const colouringSource = detectionSources.find(
+    (source) => source === values.colouringSource,
+  );
+  const draft: OnboardingDraft = {};
+
+  if (body.success) draft.body = body.data;
+  if (colouring.success) {
+    draft.colouring = colouring.data;
+    const dimensions = seasonDimensionsSchema.safeParse(values.dimensions);
+    if (dimensions.success) draft.dimensions = dimensions.data;
+    if (colouringSource) draft.colouringSource = colouringSource;
+  }
+
+  return draft;
+}
 
 type OnboardingContextValue = {
   draft: OnboardingDraft;
   isHydrated: boolean;
   setBody: (body: BodyMeasurements) => void;
-  setColouring: (colouring: Colouring, source: DetectionSource) => void;
+  setColouring: (
+    colouring: Colouring,
+    dimensions: SeasonDimensions,
+    source: DetectionSource,
+  ) => void;
   reset: () => void;
 };
 
@@ -45,7 +87,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     try {
       const stored = window.sessionStorage.getItem(DRAFT_STORAGE_KEY);
       if (stored) {
-        setDraft(JSON.parse(stored) as OnboardingDraft);
+        setDraft(parseStoredDraft(stored));
       }
     } catch {
       // ignore malformed stored draft
@@ -68,8 +110,17 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   }, []);
 
   const setColouring = useCallback(
-    (colouring: Colouring, source: DetectionSource) => {
-      setDraft((prev) => ({ ...prev, colouring, colouringSource: source }));
+    (
+      colouring: Colouring,
+      dimensions: SeasonDimensions,
+      source: DetectionSource,
+    ) => {
+      setDraft((prev) => ({
+        ...prev,
+        colouring,
+        dimensions,
+        colouringSource: source,
+      }));
     },
     [],
   );

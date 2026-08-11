@@ -3,12 +3,17 @@ import {
   bodyMeasurementsSchema,
   classifyBodyShape,
 } from "../body-shape/classify.ts";
-import { colouringSchema, mapColourSeason } from "../colour-season/map.ts";
+import {
+  colouringSchema,
+  mapColourSeason,
+  seasonDimensionsSchema,
+} from "../colour-season/map.ts";
 
 export const detectionSources = ["manual", "photo", "photo_corrected"] as const;
 
 export const styleProfileInputSchema = bodyMeasurementsSchema
   .merge(colouringSchema)
+  .merge(seasonDimensionsSchema)
   .extend({
     detectionSource: z.enum(detectionSources).default("manual"),
   });
@@ -21,7 +26,7 @@ export function deriveStyleProfile(input: StyleProfileInput) {
   return {
     ...parsed,
     bodyShape: classifyBodyShape(parsed),
-    colourSeason: mapColourSeason(parsed),
-    analysisVersion: 1,
+    colourSeason: mapColourSeason(parsed, parsed),
+    analysisVersion: 2,
   };
 }

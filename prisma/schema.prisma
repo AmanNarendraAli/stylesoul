@@ -15,7 +15,14 @@ model User {
   subscription     Subscription?
   profile          StyleProfile?
   weeklyEdits      WeeklyEdit[]
+  funnelEvents       FunnelEvent[]
+  catalogueAuditLogs CatalogueAuditLog[]
   createdAt        DateTime       @default(now())
+}
+
+model AccountDeletionGuard {
+  userIdHash String   @id
+  createdAt  DateTime @default(now())
 }
 
 model Subscription {
@@ -27,6 +34,24 @@ model Subscription {
   currentPeriodEnd DateTime
 }
 
+model AnalysisRateLimit {
+  userId       String   @id
+  windowStart  DateTime
+  requestCount Int
+  updatedAt    DateTime @updatedAt
+}
+
+model FunnelEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, name])
+  @@index([name, createdAt])
+}
+
 model StyleProfile {
   id              String   @id @default(cuid())
   userId          String   @unique
@@ -36,13 +61,17 @@ model StyleProfile {
   bustCm          Int
   waistCm         Int
   hipsCm          Int
-  shouldersCm     Int
+  shouldersCm     Int // shoulder-to-shoulder width in centimetres
   bodyShape       String
   skinTone        String
   undertone       String   @default("neutral")
   eyeColour       String
   hairColour      String
   colourSeason    String
+  temperature     String?
+  value           String?
+  chroma          String?
+  contrast        String?
   detectionSource String
   analysisVersion Int      @default(1)
   updatedAt       DateTime @updatedAt
@@ -55,7 +84,7 @@ model Product {
   title           String
   description     String?
   imageUrl        String
-  productUrl      String
+  productUrl      String   @unique
   isAffiliate     Boolean  @default(false)
   priceCents      Int
   currency        String   @default("GBP")
@@ -65,17 +94,47 @@ model Product {
   garmentCategory String
   occasionTags    String[]
   priceTier       String
+  catalogueSource String?
+  weeklyEditItems   WeeklyEditItem[]
+  auditLogs         CatalogueAuditLog[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
 
 model WeeklyEdit {
-  id         String   @id @default(cuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  weekStart  DateTime
-  productIds String[]
-  createdAt  DateTime @default(now())
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weekStart DateTime
+  items     WeeklyEditItem[]
+  createdAt DateTime         @default(now())
 
   @@unique([userId, weekStart])
+}
+
+model WeeklyEditItem {
+  id           String     @id @default(cuid())
+  weeklyEditId String
+  weeklyEdit   WeeklyEdit @relation(fields: [weeklyEditId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Restrict)
+  position     Int
+
+  @@unique([weeklyEditId, productId])
+  @@unique([weeklyEditId, position])
+  @@index([productId])
+}
+
+model CatalogueAuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String?
+  actor       User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  action      String
+  changes     Json
+  createdAt   DateTime @default(now())
+
+  @@index([actorUserId, createdAt])
+  @@index([productId, createdAt])
 }

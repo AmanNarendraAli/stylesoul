@@ -38,6 +38,7 @@ type PredictionChannel = "skinTone" | "undertone" | "eyeColour" | "hairColour";
 const predictions: Record<string, Partial<Record<PredictionChannel, string>>> = {};
 const details: Record<string, DetectedColouring> = {};
 let predicted = 0;
+let rejected = 0;
 
 for (const filename of filenames) {
   const imagePath = join(samplesDir, filename);
@@ -46,7 +47,13 @@ for (const filename of filenames) {
     continue;
   }
   const source = await readPixelSource(imagePath);
-  const detected = detectColouringHeuristic(source);
+  const detection = detectColouringHeuristic(source);
+  if (!detection.ok) {
+    console.warn(`Skipping ${filename}: ${detection.quality.message}`);
+    rejected += 1;
+    continue;
+  }
+  const { detected } = detection;
   details[filename] = detected;
   predictions[filename] = {
     skinTone: detected.skinTone?.value,
@@ -61,6 +68,7 @@ writeFileSync(predictionsPath, `${JSON.stringify(predictions, null, 2)}\n`, "utf
 writeFileSync(detailsPath, `${JSON.stringify(details, null, 2)}\n`, "utf8");
 
 console.log(`Predicted ${predicted}/${filenames.length} samples.`);
+console.log(`Rejected ${rejected} low-quality or low-confidence samples.`);
 console.log(`Wrote ${predictionsPath}`);
 console.log(`Wrote ${detailsPath}`);
 console.log("Note: heuristic fallback predicts skin/hair only; eyeColour remains manual without landmarks.");
