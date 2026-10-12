@@ -43,7 +43,7 @@ CLASSES = {
     "skinTone": ["porcelain", "fair", "light", "medium", "tan", "brown", "deep", "very_deep"],
     "undertone": ["cool", "neutral", "warm", "olive"],
     "eyeColour": ["blue", "green", "grey", "hazel", "brown", "amber"],
-    "hairColour": ["platinum_blonde", "golden_blonde", "ash_brown", "chestnut_brown", "auburn", "red", "black", "grey"],
+    "hairColour": ["platinum_blonde", "golden_blonde", "ash_brown", "chestnut_brown", "auburn", "red", "brown_black", "black", "grey"],
 }
 
 
@@ -165,6 +165,13 @@ class ChannelModel:
             "weights": [[round(float(v), 4) for v in row] for row in coef[:, :n_colour]],
             "minConfidence": min_confidence,
         }
+        if self.channel in NEIGHBOURS:
+            present = set(self.classes_)
+            out["neighbours"] = {
+                c: [n for n in near if n in present]
+                for c, near in NEIGHBOURS[self.channel].items()
+                if c in present
+            }
         if self.channel in EMBEDDING:
             # logits = W_p · (P(e - mu) / s) + ...  ==  (W_p / s) P · e  -  (W_p / s) P · mu
             folded = (coef[:, n_colour:] / self.pca_scale) @ self.pca.components_
@@ -190,12 +197,40 @@ def cross_validate(X, E, y, groups, channel: str):
     return np.array(classes), prob
 
 
+def _adjacent(order: list[str]) -> dict[str, list[str]]:
+    return {c: order[max(0, i - 1) : i] + order[i + 1 : i + 2] for i, c in enumerate(order)}
+
+
+# Near misses a user would see as "close": one skin shade off, or a neighbouring
+# dark hair shade (the black / brown-black / chestnut borders are blurry in photos).
+NEIGHBOURS = {
+    "skinTone": _adjacent(CLASSES["skinTone"]),
+    "hairColour": {
+        "black": ["brown_black"],
+        "brown_black": ["black", "chestnut_brown"],
+        "chestnut_brown": ["brown_black"],
+    },
+}
+# Share of shown suggestions that must be right or a near miss.
+NEAR_PRECISION = {"skinTone": 0.9, "hairColour": 0.85}
+
+
 def acceptable(channel: str, y, pred):
-    """Skin tone is an ordinal scale, so a one-step miss still counts as useful."""
-    if channel == "skinTone":
-        order = CLASSES[channel]
-        return np.array([abs(order.index(p) - order.index(t)) <= 1 for p, t in zip(pred, y)])
-    return pred == y
+    """Right, or a near miss for channels with neighbours."""
+    near = NEIGHBOURS.get(channel, {})
+    return np.array([p == t or t in near.get(p, []) for p, t in zip(pred, y)])
+
+
+def grouped_confidence(channel: str, classes, prob):
+    """Probability of the prediction plus its near-miss neighbours; the browser
+    computes the same from the exported neighbours."""
+    near = NEIGHBOURS.get(channel, {})
+    index = {c: i for i, c in enumerate(classes)}
+    best = prob.argmax(axis=1)
+    return np.array([
+        prob[r, b] + sum(prob[r, index[n]] for n in near.get(classes[b], []) if n in index)
+        for r, b in enumerate(best)
+    ])
 
 
 def score(channel: str, y, pred) -> float:
@@ -238,7 +273,6 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", action="append", required=True, help="features.json:labels[:groups.json][#channels]")
     parser.add_argument("--precision", type=float, default=0.8)
-    parser.add_argument("--skin-precision", type=float, default=0.9, help="within-one precision target")
     parser.add_argument("--test", action="store_true", help="also score the held-out people (use sparingly)")
     parser.add_argument("--write", action="store_true", help="fit on all data and write model.ts")
     args = parser.parse_args()
@@ -275,10 +309,11 @@ def main() -> None:
             test_scores.append(score(channel, y_all[held], test_pred))
 
         ok = acceptable(channel, y, pred)
-        target = args.skin_precision if channel == "skinTone" else args.precision
+        confidence = grouped_confidence(channel, list(classes), prob)
+        target = NEAR_PRECISION.get(channel, args.precision)
         threshold = threshold_for(ok, confidence, target)
         accepted = confidence >= threshold
-        kind = "within-one precision" if channel == "skinTone" else "precision"
+        kind = "right-or-near precision" if channel in NEIGHBOURS else "precision"
         print(f"  suggest when confidence >= {threshold:.2f}: {kind} {np.mean(ok[accepted]):.1%} on {accepted.mean():.0%} of photos")
 
         model_json[channel] = ChannelModel(channel).fit(X_all, E_all, y_all).export(threshold)
@@ -292,6 +327,8 @@ def main() -> None:
             "export type ChannelModel = {\n"
             "  features: string[];\n  classes: string[];\n  mean: number[];\n  scale: number[];\n"
             "  weights: number[][];\n  bias: number[];\n  minConfidence: number;\n"
+            "  /** Near-miss classes whose probability counts towards confidence. */\n"
+            "  neighbours?: Record<string, string[]>;\n"
             '  /** Extra weights over a raw image embedding (see crops.ts). */\n'
             '  embedding?: { input: "face" | "hair"; weights: number[][] };\n};\n\n'
             'export const model: Record<"skinTone" | "undertone" | "eyeColour" | "hairColour", ChannelModel> = {\n'

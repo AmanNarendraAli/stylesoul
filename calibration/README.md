@@ -185,3 +185,18 @@ Final, same held-out people (n≈330–520 per channel), before → after:
 Thresholds (dev CV): skin 0.45 → 90% within-one on 70% of photos; undertone
 0.63 → 80% on 50%; eye 0.42 → 81% on 85%; hair 0.67 → 80% on 53%.
 `very_deep` still has only 4 labelled samples and cannot be predicted.
+
+### 2026-10-12 — brown-black hair; near-miss confidence
+
+- Added `brown_black` (very dark brown that reads almost black but shows brown
+  in the light). Every training photo previously labelled black or chestnut was
+  relabelled for hair only (743 public photos, 84 Photos-library people) against
+  `out/hair-rubric.md`; 96 double-labelled photos agreed 85%. 286 public photos
+  and 45 people moved to brown_black.
+- Hair (held-out): 56% exact over 9 classes. The black / brown-black /
+  chestnut borders are blurry in photos, so an exact-precision threshold would
+  only ever suggest a hair colour on ~5% of photos.
+- Confidence now includes near-miss neighbours (`NEIGHBOURS` in train.py,
+  exported to model.ts): the adjacent skin shade, and the neighbouring dark
+  hair shade. Thresholds are set on right-or-near precision. Hair: 85% on 76% of
+  photos. Skin: 90% within one shade on 82% of photos (was 70%).

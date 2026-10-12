@@ -125,5 +125,10 @@ export function classify<C extends Channel>(
   const exps = scores.map((s) => Math.exp(s - max));
   const total = exps.reduce((a, b) => a + b, 0);
   const best = scores.indexOf(max);
-  return { value: m.classes[best] as ChannelValue[C], confidence: exps[best] / total };
+  // Near misses (an adjacent skin shade, a neighbouring dark hair shade) count
+  // towards confidence, matching how the thresholds were calibrated.
+  const near = m.neighbours?.[m.classes[best]] ?? [];
+  const confidence =
+    near.reduce((sum, n) => sum + exps[m.classes.indexOf(n)], exps[best]) / total;
+  return { value: m.classes[best] as ChannelValue[C], confidence };
 }
