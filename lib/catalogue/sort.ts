@@ -1,12 +1,4 @@
-import { SEASON_LABELS, SHAPE_LABELS } from "@/components/avatar/palettes";
-
-export const catalogueSortKeys = [
-  "name",
-  "brand",
-  "silhouette",
-  "colour",
-  "price",
-] as const;
+export const catalogueSortKeys = ["name", "brand", "price"] as const;
 
 export type CatalogueSortKey = (typeof catalogueSortKeys)[number];
 export type CatalogueSortDirection = "asc" | "desc";
@@ -15,8 +7,6 @@ type SortableProduct = {
   title: string;
   brand: string;
   priceCents: number;
-  eligibleShapes: Array<keyof typeof SHAPE_LABELS>;
-  eligibleSeasons: Array<keyof typeof SEASON_LABELS>;
 };
 
 const collator = new Intl.Collator("en-GB", {
@@ -47,21 +37,8 @@ function compareProduct(
   if (key === "price") {
     return left.priceCents - right.priceCents;
   }
-
-  return collator.compare(sortValue(left, key), sortValue(right, key));
-}
-
-function sortValue(product: SortableProduct, key: Exclude<CatalogueSortKey, "price">) {
-  if (key === "name") return product.title;
-  if (key === "brand") return product.brand;
-  if (key === "silhouette") {
-    return product.eligibleShapes
-      .map((shape) => SHAPE_LABELS[shape])
-      .sort(collator.compare)
-      .join(", ");
+  if (key === "brand") {
+    return collator.compare(left.brand, right.brand);
   }
-  return product.eligibleSeasons
-    .map((season) => SEASON_LABELS[season])
-    .sort(collator.compare)
-    .join(", ");
+  return collator.compare(left.title, right.title);
 }

@@ -1,6 +1,6 @@
-import type { BodyShape } from "@/lib/body-shape/classify";
 import type { ColourSeason } from "@/lib/colour-season/map";
-import { Avatar } from "@/components/avatar/Avatar";
+import { SEASON_PALETTES } from "@/components/avatar/palettes";
+import { SEASON_LABELS } from "@/lib/labels";
 
 export type RecommendationCardProduct = {
   id: string;
@@ -17,29 +17,34 @@ export type RecommendationCardProduct = {
 
 export function ProductCard({
   product,
-  shape,
   season,
 }: {
   product: RecommendationCardProduct;
-  shape: BodyShape;
-  season: ColourSeason;
+  season: ColourSeason | null;
 }) {
   return (
     <article className="group overflow-hidden rounded-xl border border-cream/15 bg-cream/[0.03]">
       <div
-        aria-hidden="true"
-        className="relative aspect-[4/5] bg-cream/5 bg-cover bg-center"
+        role="img"
+        aria-label={product.title}
+        className="aspect-[4/5] bg-cream/5 bg-cover bg-center"
         style={{ backgroundImage: `url(${JSON.stringify(product.imageUrl)})` }}
-      >
-        <div className="absolute bottom-3 right-3 rounded-full border border-cream/20 bg-charcoal/85 p-2 shadow-xl backdrop-blur">
-          <Avatar shape={shape} season={season} size={82} />
-        </div>
-      </div>
+      />
       <div className="p-5">
         <p className="text-xs uppercase tracking-[0.2em] text-gold">
           {product.brand}
         </p>
         <h2 className="mt-2 font-display text-2xl">{product.title}</h2>
+        {season ? (
+          <p className="mt-3 inline-flex items-center gap-2 rounded-full border border-cream/15 px-3 py-1 text-xs text-cream/80">
+            <span
+              aria-hidden="true"
+              className="h-2.5 w-2.5 rounded-full"
+              style={{ backgroundColor: SEASON_PALETTES[season].accent }}
+            />
+            Suits {SEASON_LABELS[season]}
+          </p>
+        ) : null}
         {product.description ? (
           <p className="mt-2 line-clamp-2 text-sm text-cream/65">
             {product.description}

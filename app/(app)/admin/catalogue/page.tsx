@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { CatalogueManager } from "@/components/admin/CatalogueManager";
+import { signInPath } from "@/lib/auth-redirect";
 import { getAdminActorState } from "@/lib/server/auth";
 import {
   catalogueCoverage,
@@ -9,7 +10,7 @@ import {
 export default async function CatalogueAdminPage() {
   const auth = await getAdminActorState();
   if (!auth.ok) {
-    if (auth.status === 401) redirect("/signin");
+    if (auth.status === 401) redirect(signInPath("/admin/catalogue"));
     if (auth.status === 403) notFound();
     throw new Error(auth.message);
   }

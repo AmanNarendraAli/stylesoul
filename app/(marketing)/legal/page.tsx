@@ -82,13 +82,11 @@ export default function LegalPage() {
                 record general page views.
               </li>
               <li>
-                Security records: a per-user photo-analysis request count and
-                time window. Administrators also create catalogue audit records.
+                Security records: administrators create catalogue audit records.
               </li>
               <li>
-                Optional photo data: on-device analysis does not send the photo
-                to StyleSoul. If the user explicitly enables server fallback, the
-                browser sends only a downscaled pixel buffer for that request.
+                Optional photo data: a photo taken with the in-app camera is
+                analysed on the user&apos;s device and is not sent to StyleSoul.
               </li>
             </ul>
           </LegalSection>
@@ -101,7 +99,7 @@ export default function LegalPage() {
                 request.
               </li>
               <li>
-                To secure the service, enforce access controls and rate limits,
+                To secure the service, enforce access controls,
                 diagnose redacted failures, and audit administrator catalogue
                 changes.
               </li>
@@ -111,34 +109,23 @@ export default function LegalPage() {
                 operator can assess whether the preview is useful without a
                 third-party analytics service.
               </li>
-              <li>
-                To process a downscaled pixel buffer on the StyleSoul server only
-                when the user gives specific consent by enabling server fallback.
-                The user may leave that option off and use manual swatches.
-              </li>
             </ul>
             <p className="mt-4">
               The service functions are performed to provide the preview the
               user requested. Security, administration, and coarse funnel
               measurement rely on the operator&apos;s legitimate interests in
               running a safe, reliable service and evaluating the preview while
-              recording only one timestamp per milestone. Consent is used for
-              the optional server photo fallback and can be withheld without
-              losing the manual path.
+              recording only one timestamp per milestone.
             </p>
           </LegalSection>
 
           <LegalSection title="Photo and pixel handling">
             <p>
-              The browser first attempts photo analysis on the user&apos;s
-              device. Server fallback is off by default. When enabled, the
-              browser decodes and downsizes the selected image before sending a
-              bounded RGBA pixel buffer over HTTPS. The server processes that
-              buffer in memory, returns editable colour suggestions, and
-              discards the buffer when the request ends. StyleSoul does not
-              persist the original photo or pixel buffer, include it in logs, or
-              send it to an external vision provider. Request-count metadata is
-              retained to enforce the rate limit.
+              Photos are taken with the in-app camera and analysed only on the
+              user&apos;s device. Live camera frames and the captured photo are
+              never uploaded to StyleSoul, stored, or sent to an external vision
+              provider. If on-device analysis is unavailable, the user picks
+              their colouring from manual swatches.
             </p>
           </LegalSection>
 
@@ -152,8 +139,7 @@ export default function LegalPage() {
               </li>
               <li>
                 The deployment&apos;s web-hosting infrastructure serves the
-                application and runs server routes, including the optional
-                in-memory photo fallback.
+                application and runs server routes.
               </li>
               <li>
                 When the weekly edit is displayed, the browser automatically
@@ -168,9 +154,8 @@ export default function LegalPage() {
                 MediaPipe runtime files from jsDelivr and the face-landmarker
                 model from Google-hosted storage. Those providers receive
                 ordinary asset-request data such as the IP address, user agent,
-                and requested asset URL. StyleSoul does not send the selected
-                photo, pixel buffer, measurements, or style profile to either
-                asset host.
+                and requested asset URL. StyleSoul does not send the photo,
+                measurements, or style profile to either asset host.
               </li>
               <li>
                 Retailers are independent controllers when a user follows a
@@ -201,7 +186,7 @@ export default function LegalPage() {
           <LegalSection title="Retention and deletion">
             <p>
               StyleSoul keeps the current profile, account record, weekly edits,
-              coarse funnel milestones, and rate-limit record until the account
+              and coarse funnel milestones until the account
               is deleted or the preview is retired. Account deletion removes
               those records and the
               Supabase sign-in identity. Catalogue audit records are retained
@@ -211,7 +196,7 @@ export default function LegalPage() {
               to prevent in-flight requests from recreating deleted records; it
               cannot be used to sign in or retrieve the account.
               Re-analysis replaces the current profile values; it does not keep
-              profile-history versions. Pixel buffers last only for the server request.
+              profile-history versions.
             </p>
           </LegalSection>
 
@@ -239,9 +224,7 @@ export default function LegalPage() {
               >
                 account page
               </Link>
-              . Withdrawing photo fallback consent does not affect an already
-              completed in-memory request because its pixels have already been
-              discarded. Other requests can be made through the controller
+              . Other requests can be made through the controller
               contact described above. Identity may need to be verified before
               a request is fulfilled.
             </p>
@@ -263,8 +246,8 @@ export default function LegalPage() {
           <LegalSection title="Security and children">
             <p>
               StyleSoul uses authenticated access, row-level database policies,
-              server-side ownership checks, bounded photo requests, rate
-              limiting, HTTPS-only product URL validation, and sensitive-data
+              server-side ownership checks, HTTPS-only product URL validation,
+              and sensitive-data
               redaction. No
               internet service can guarantee absolute security. The preview is
               intended for adults aged 18 or over and is not directed to
@@ -299,11 +282,11 @@ export default function LegalPage() {
               <li>
                 Users must not probe, disrupt, overload, scrape, reverse
                 engineer, or bypass the service&apos;s authentication, ownership,
-                administrator, or rate-limit controls.
+                or administrator controls.
               </li>
               <li>
-                A user may upload only a photo they have the right to use and
-                must not submit another person&apos;s image without permission.
+                A user may only photograph themselves, or another person with
+                their permission.
               </li>
               <li>
                 The operator may suspend access needed to protect users, data, or

@@ -12,12 +12,7 @@ import {
   bodyMeasurementsSchema,
   type BodyMeasurements,
 } from "@/lib/body-shape/classify";
-import {
-  colouringSchema,
-  seasonDimensionsSchema,
-  type Colouring,
-  type SeasonDimensions,
-} from "@/lib/colour-season/map";
+import { colouringSchema, type Colouring } from "@/lib/colour-season/map";
 import { detectionSources } from "@/lib/style-profile/schema";
 import { ONBOARDING_DRAFT_STORAGE_KEY as DRAFT_STORAGE_KEY } from "@/lib/onboarding-draft";
 
@@ -26,14 +21,15 @@ export type DetectionSource = (typeof detectionSources)[number];
 export type OnboardingDraft = {
   body?: BodyMeasurements;
   colouring?: Colouring;
-  /** The four confirmed drape comparisons; required to map a season. */
-  dimensions?: SeasonDimensions;
   /** How the colouring was obtained — drives the profile's detectionSource. */
   colouringSource?: DetectionSource;
+  /** In-progress swatch picks, so a reload keeps them. */
+  colouringSelections?: Partial<Colouring>;
 };
 
-function parseStoredDraft(stored: string): OnboardingDraft {
-  const candidate: unknown = JSON.parse(stored);
+const colouringSelectionsSchema = colouringSchema.partial();
+
+function parseDraft(candidate: unknown): OnboardingDraft {
   if (
     typeof candidate !== "object" ||
     candidate === null ||
@@ -45,6 +41,9 @@ function parseStoredDraft(stored: string): OnboardingDraft {
   const values = candidate as Record<string, unknown>;
   const body = bodyMeasurementsSchema.safeParse(values.body);
   const colouring = colouringSchema.safeParse(values.colouring);
+  const colouringSelections = colouringSelectionsSchema.safeParse(
+    values.colouringSelections,
+  );
   const colouringSource = detectionSources.find(
     (source) => source === values.colouringSource,
   );
@@ -53,23 +52,34 @@ function parseStoredDraft(stored: string): OnboardingDraft {
   if (body.success) draft.body = body.data;
   if (colouring.success) {
     draft.colouring = colouring.data;
-    const dimensions = seasonDimensionsSchema.safeParse(values.dimensions);
-    if (dimensions.success) draft.dimensions = dimensions.data;
     if (colouringSource) draft.colouringSource = colouringSource;
+  }
+  if (colouringSelections.success) {
+    draft.colouringSelections = colouringSelections.data;
   }
 
   return draft;
 }
 
+/** Seeds a re-run of the analysis from the user's saved profile, if any. */
+async function fetchProfileDraft(): Promise<OnboardingDraft> {
+  const response = await fetch("/api/profile");
+  if (!response.ok) return {};
+  const { profile } = await response.json();
+  return parseDraft({
+    body: profile,
+    colouring: profile,
+    colouringSource: profile.detectionSource,
+  });
+}
+
 type OnboardingContextValue = {
   draft: OnboardingDraft;
   isHydrated: boolean;
-  setBody: (body: BodyMeasurements) => void;
-  setColouring: (
-    colouring: Colouring,
-    dimensions: SeasonDimensions,
-    source: DetectionSource,
-  ) => void;
+  /** `undefined` skips measurements; they stay optional. */
+  setBody: (body: BodyMeasurements | undefined) => void;
+  setColouring: (colouring: Colouring, source: DetectionSource) => void;
+  setColouringSelections: (selections: Partial<Colouring>) => void;
   reset: () => void;
 };
 
@@ -80,24 +90,38 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      setIsHydrated(true);
-      return;
-    }
+    let cancelled = false;
+    let storedDraft: OnboardingDraft = {};
     try {
       const stored = window.sessionStorage.getItem(DRAFT_STORAGE_KEY);
       if (stored) {
-        setDraft(parseStoredDraft(stored));
+        storedDraft = parseDraft(JSON.parse(stored));
       }
     } catch {
       // ignore malformed stored draft
-    } finally {
-      setIsHydrated(true);
     }
+
+    // A local draft is the user's latest work; only without one do we
+    // prefill from the saved profile.
+    if (Object.keys(storedDraft).length > 0) {
+      setDraft(storedDraft);
+      setIsHydrated(true);
+      return;
+    }
+    fetchProfileDraft()
+      .catch(() => ({}))
+      .then((profileDraft) => {
+        if (cancelled) return;
+        setDraft(profileDraft);
+        setIsHydrated(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !isHydrated) return;
+    if (!isHydrated) return;
     try {
       window.sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
     } catch {
@@ -105,40 +129,43 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     }
   }, [draft, isHydrated]);
 
-  const setBody = useCallback((body: BodyMeasurements) => {
+  const setBody = useCallback((body: BodyMeasurements | undefined) => {
     setDraft((prev) => ({ ...prev, body }));
   }, []);
 
   const setColouring = useCallback(
-    (
-      colouring: Colouring,
-      dimensions: SeasonDimensions,
-      source: DetectionSource,
-    ) => {
-      setDraft((prev) => ({
-        ...prev,
-        colouring,
-        dimensions,
-        colouringSource: source,
-      }));
+    (colouring: Colouring, source: DetectionSource) => {
+      setDraft((prev) => ({ ...prev, colouring, colouringSource: source }));
+    },
+    [],
+  );
+
+  const setColouringSelections = useCallback(
+    (colouringSelections: Partial<Colouring>) => {
+      setDraft((prev) => ({ ...prev, colouringSelections }));
     },
     [],
   );
 
   const reset = useCallback(() => {
     setDraft({});
-    if (typeof window !== "undefined") {
-      try {
-        window.sessionStorage.removeItem(DRAFT_STORAGE_KEY);
-      } catch {
-        // ignore
-      }
+    try {
+      window.sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+    } catch {
+      // ignore
     }
   }, []);
 
   const value = useMemo(
-    () => ({ draft, isHydrated, setBody, setColouring, reset }),
-    [draft, isHydrated, setBody, setColouring, reset],
+    () => ({
+      draft,
+      isHydrated,
+      setBody,
+      setColouring,
+      setColouringSelections,
+      reset,
+    }),
+    [draft, isHydrated, setBody, setColouring, setColouringSelections, reset],
   );
 
   return (

@@ -1,21 +1,13 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUserState } from "@/lib/server/auth";
+import { requireUser } from "@/lib/server/require-user";
 import { recordFunnelEvent } from "@/lib/server/funnel";
 
 export async function POST() {
-  const auth = await getAuthenticatedUserState();
-  if (!auth.available) {
-    return NextResponse.json(
-      { message: "Authentication unavailable" },
-      { status: 503 },
-    );
-  }
-  if (!auth.user) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
 
   await recordFunnelEvent({
-    userId: auth.user.id,
+    userId: user.id,
     name: "first_edit_view",
   });
 

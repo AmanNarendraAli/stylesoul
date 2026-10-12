@@ -1,20 +1,11 @@
 import { NextResponse } from "next/server";
 import { buildAccountExport } from "@/lib/server/account-data";
-import { getAuthenticatedUserState } from "@/lib/server/auth";
+import { requireUser } from "@/lib/server/require-user";
 
 export async function GET() {
-  const auth = await getAuthenticatedUserState();
-  if (!auth.available) {
-    return NextResponse.json(
-      { message: "Authentication unavailable" },
-      { status: 503 },
-    );
-  }
-  if (!auth.user) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
 
-  const { user } = auth;
   const accountExport = await buildAccountExport({
     id: user.id,
     email: user.email ?? null,

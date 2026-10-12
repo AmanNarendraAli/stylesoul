@@ -8,13 +8,13 @@ export default defineConfig({
     alias: {
       "@": fileURLToPath(new URL(".", import.meta.url)),
       "server-only": fileURLToPath(
-        new URL("./tests/server-only.ts", import.meta.url),
+        new URL("./tests/shims/server-only.ts", import.meta.url),
       ),
     },
   },
   test: {
     environment: "jsdom",
     clearMocks: true,
-    include: ["tests/**/*.integration.test.{ts,tsx}"],
+    include: ["tests/**/*.test.{ts,tsx}"],
   },
 });

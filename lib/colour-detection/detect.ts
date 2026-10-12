@@ -4,28 +4,20 @@ import type {
   SkinTone,
   Undertone,
 } from "../colour-season/map.ts";
-import type { Lab } from "./colour.ts";
-import { dominantLab } from "./cluster.ts";
-import { matchNearest } from "./match.ts";
-import { eyePresets, hairPresets, skinPresets } from "./presets.ts";
+import { extractFeatures, type Features } from "./features.ts";
+import { model } from "./model.ts";
+import { assessQuality, type QualityResult } from "./quality.ts";
 import {
   faceAreaFraction,
-  meanLightness,
-  sampleBox,
-  sampleEye,
-  sampleHair,
-  sampleSkin,
+  type HairMask,
   type PixelSource,
   type Point,
 } from "./regions.ts";
-import { assessQuality, type QualityResult } from "./quality.ts";
-
-const MIN_CHANNEL_CONFIDENCE = 0.35;
 
 /**
- * A single detected channel: the matched preset plus a 0–1 confidence the UX
- * uses to decide how strongly to suggest it. Channels with no usable samples
- * (e.g. hair off-frame) are simply absent.
+ * A single detected channel: the predicted preset plus the classifier's
+ * probability for it. In a DetectionResult, channels that could not be
+ * sampled or fall below the calibrated threshold are absent.
  */
 export type DetectedChannel<T extends string> = {
   value: T;
@@ -43,63 +35,39 @@ export type DetectionResult =
   | { ok: true; detected: DetectedColouring }
   | { ok: false; quality: Extract<QualityResult, { ok: false }> };
 
+/** Image-embedder vectors for the crops in crops.ts. */
+export type Embeddings = { face?: ArrayLike<number>; hair?: ArrayLike<number> };
+
 /**
- * Full client detection: landmark-driven region sampling, quality gate, then
- * dominant-colour + nearest-preset matching per channel.
+ * Landmark-driven detection: quality gate, then per-channel classification of
+ * the sampled skin / iris / sclera / hair colours plus image embeddings.
+ * `hairMask` comes from the hair segmenter; without it hair colour is left to
+ * the manual screen.
  */
 export function detectColouring(
   source: PixelSource,
   landmarks: Point[],
   faceCount: number,
+  hairMask?: HairMask,
+  embeddings: Embeddings = {},
 ): DetectionResult {
-  const skinSamples = sampleSkin(source, landmarks);
-
+  const features = faceCount === 1 ? extractFeatures(source, landmarks, hairMask) : {};
   const quality = assessQuality({
     faceCount,
-    meanLightness: meanLightness(skinSamples),
+    skinLightness: features["skin.l"] ?? 0,
     faceAreaFraction: faceAreaFraction(landmarks),
   });
   if (!quality.ok) {
     return { ok: false, quality };
   }
 
-  return gateDetectedColouring(
-    detectFromSamples({
-      skin: skinSamples,
-      eye: sampleEye(source, landmarks),
-      hair: sampleHair(source, landmarks),
-    }),
-  );
-}
-
-/**
- * Landmark-free detection for the server fallback. Without a face mesh we
- * approximate regions by position: a centre box for skin and a top band for
- * hair. Eye colour needs the iris landmarks, so it is left for the manual
- * screen.
- */
-export function detectColouringHeuristic(
-  source: PixelSource,
-): DetectionResult {
-  const skin = sampleBox(source, { x0: 0.35, y0: 0.4, x1: 0.65, y1: 0.7 });
-  const hair = sampleBox(source, { x0: 0.3, y0: 0.02, x1: 0.7, y1: 0.15 });
-  const quality = assessQuality({
-    faceCount: 1,
-    meanLightness: meanLightness(skin),
-    faceAreaFraction: 1,
-  });
-  if (!quality.ok) {
-    return { ok: false, quality };
-  }
-
-  return gateDetectedColouring(detectFromSamples({ skin, eye: [], hair }));
-}
-
-function gateDetectedColouring(
-  detected: DetectedColouring,
-): DetectionResult {
-  const skinTone = confidentChannel(detected.skinTone);
-  if (!skinTone) {
+  const detected: DetectedColouring = {
+    skinTone: confident("skinTone", features, embeddings),
+    undertone: confident("undertone", features, embeddings),
+    eyeColour: confident("eyeColour", features, embeddings),
+    hairColour: confident("hairColour", features, embeddings),
+  };
+  if (!Object.values(detected).some(Boolean)) {
     return {
       ok: false,
       quality: {
@@ -110,59 +78,52 @@ function gateDetectedColouring(
       },
     };
   }
-
-  return {
-    ok: true,
-    detected: {
-      skinTone,
-      undertone: detected.undertone,
-      eyeColour: confidentChannel(detected.eyeColour),
-      hairColour: confidentChannel(detected.hairColour),
-    },
-  };
+  return { ok: true, detected };
 }
 
-function confidentChannel<T extends string>(
-  channel: DetectedChannel<T> | undefined,
-): DetectedChannel<T> | undefined {
-  return channel && channel.confidence >= MIN_CHANNEL_CONFIDENCE
-    ? channel
+type Channel = keyof typeof model;
+type ChannelValue = {
+  skinTone: SkinTone;
+  undertone: Undertone;
+  eyeColour: EyeColour;
+  hairColour: HairColour;
+};
+
+/** A prediction only if it clears the channel's calibrated threshold. */
+function confident<C extends Channel>(channel: C, features: Features, embeddings: Embeddings) {
+  const prediction = classify(channel, features, embeddings);
+  return prediction && prediction.confidence >= model[channel].minConfidence
+    ? prediction
     : undefined;
 }
 
-/** Match each channel's dominant colour to the nearest preset. */
-export function detectFromSamples(samples: {
-  skin: Lab[];
-  eye: Lab[];
-  hair: Lab[];
-}): DetectedColouring {
-  const detected: DetectedColouring = {};
+/**
+ * Multinomial logistic regression over standardised features and, for some
+ * channels, a raw image embedding (fitted by calibration/scripts/train.py).
+ * Returns undefined when a required region or embedding is missing.
+ */
+export function classify<C extends Channel>(
+  channel: C,
+  features: Features,
+  embeddings: Embeddings = {},
+): DetectedChannel<ChannelValue[C]> | undefined {
+  const m = model[channel];
+  const x = m.features.map((name, i) => (features[name] - m.mean[i]) / m.scale[i]);
+  if (x.some((v) => !Number.isFinite(v))) return undefined;
+  const e = m.embedding && embeddings[m.embedding.input];
+  if (m.embedding && !e) return undefined;
 
-  if (samples.skin.length > 0) {
-    const skinLab = dominantLab(samples.skin);
-    const m = matchNearest(skinLab, skinPresets);
-    detected.skinTone = { value: m.value, confidence: m.confidence };
-    detected.undertone = {
-      value: undertoneFromLab(skinLab),
-      confidence: Math.max(0, Math.min(1, m.confidence * 0.55)),
-    };
-  }
-  if (samples.eye.length > 0) {
-    const m = matchNearest(dominantLab(samples.eye), eyePresets);
-    detected.eyeColour = { value: m.value, confidence: m.confidence };
-  }
-  if (samples.hair.length > 0) {
-    const m = matchNearest(dominantLab(samples.hair), hairPresets);
-    detected.hairColour = { value: m.value, confidence: m.confidence };
-  }
-
-  return detected;
-}
-
-function undertoneFromLab({ a, b }: Lab): Undertone {
-  const warmth = b - a * 0.35;
-  if (warmth > 14 && a < 13) return "olive";
-  if (warmth > 10) return "warm";
-  if (warmth < 5) return "cool";
-  return "neutral";
+  const scores = m.weights.map((w, k) => {
+    let sum = w.reduce((acc, wi, i) => acc + wi * x[i], m.bias[k]);
+    if (m.embedding && e) {
+      const we = m.embedding.weights[k];
+      for (let j = 0; j < we.length; j++) sum += we[j] * e[j];
+    }
+    return sum;
+  });
+  const max = Math.max(...scores);
+  const exps = scores.map((s) => Math.exp(s - max));
+  const total = exps.reduce((a, b) => a + b, 0);
+  const best = scores.indexOf(max);
+  return { value: m.classes[best] as ChannelValue[C], confidence: exps[best] / total };
 }

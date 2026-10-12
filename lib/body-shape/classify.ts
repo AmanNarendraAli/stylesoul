@@ -10,24 +10,39 @@ export const bodyShapes = [
 
 export type BodyShape = (typeof bodyShapes)[number];
 
+export function isBodyShape(value: string): value is BodyShape {
+  return (bodyShapes as readonly string[]).includes(value);
+}
+
 const emptyToUndefined = (value: unknown) =>
   value === "" || value === null || value === undefined ? undefined : value;
 
+/** Whole-number measurement whose every error states the allowed range. */
+const measurement = (label: string, min: number, max: number, unit = "cm") => {
+  const message = `Enter a ${label} between ${min} and ${max} ${unit}`;
+  return z.coerce
+    .number({ error: message })
+    .int(message)
+    .min(min, message)
+    .max(max, message);
+};
+
+/** An optional measurement; blank or null counts as not given. */
+export const optionalMeasurement = (
+  label: string,
+  min: number,
+  max: number,
+  unit = "cm",
+) => z.preprocess(emptyToUndefined, measurement(label, min, max, unit).optional());
+
+/** Bust, waist and hips drive the shape; height and shoulders are extras. */
 export const bodyMeasurementsSchema = z.object({
-  heightCm: z.coerce.number().int().min(120).max(230),
-  weightKg: z.preprocess(
-    emptyToUndefined,
-    z.coerce.number().int().min(35).max(250).optional(),
-  ),
-  bustCm: z.coerce.number().int().min(60).max(180),
-  waistCm: z.coerce.number().int().min(45).max(180),
-  hipsCm: z.coerce.number().int().min(60).max(190),
+  heightCm: optionalMeasurement("height", 120, 230),
+  bustCm: measurement("bust measurement", 60, 180),
+  waistCm: measurement("waist measurement", 45, 180),
+  hipsCm: measurement("hip measurement", 60, 190),
   // Stored as `shouldersCm` for compatibility; this is shoulder-to-shoulder width.
-  shouldersCm: z.coerce
-    .number()
-    .int()
-    .min(25, "Enter a shoulder width between 25 and 70 cm")
-    .max(70, "Enter a shoulder width between 25 and 70 cm"),
+  shouldersCm: optionalMeasurement("shoulder width", 25, 70),
 });
 
 export type BodyMeasurements = z.infer<typeof bodyMeasurementsSchema>;

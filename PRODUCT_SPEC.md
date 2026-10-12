@@ -60,7 +60,7 @@ The user explicitly selects from fixed natural-colouring options. The system map
 - Eye colour — 6 options
 - Hair colour — 8 options
 
-Optional photo suggestions are experimental and uncalibrated. Manual swatches remain canonical; every suggestion must be reviewed, and server fallback requires explicit consent.
+Optional photo suggestions are experimental and uncalibrated. Manual swatches remain canonical and every suggestion must be reviewed.
 
 ### Colour Seasons (4)
 
@@ -130,7 +130,7 @@ Sharing, voting, discount alerts, wishlists, gift ideas, and preference tracking
 - **Payments:** Pricing, trials, subscriptions, checkout, customer portal, and payment-provider selection are deferred pending explicit approval.
 - **Retail links:** Direct HTTPS links only. Affiliate partnerships and tracking are not active.
 - **Profile data:** Authentication and profile/catalogue data use Supabase infrastructure. Hosting and database providers act as processors as described on the legal page.
-- **Photo data:** On-device analysis is preferred. With explicit consent, an in-memory downscaled pixel buffer may be processed by the StyleSoul server fallback and is discarded after the request; original photos and pixel buffers are not persisted.
+- **Photo data:** Photos come only from the guided in-app camera and are analysed on the device. Photos and camera frames are never uploaded or persisted; without a camera the user picks swatches manually.
 
 ### Current User Benefits
 - Body measurement and provisional silhouette analysis

@@ -1,7 +1,8 @@
-import { colourSeasons, type ColourSeason } from "../colour-season/map.ts";
+import { isColourSeason, type ColourSeason } from "../colour-season/map.ts";
 
 export type RecommendationProfile = {
-  bodyShape: string;
+  /** Null when no measurements were given: selection uses season only. */
+  bodyShape: string | null;
   colourSeason: string;
 };
 
@@ -46,9 +47,12 @@ export function selectWeeklyProducts({
         stableHash(`${userId}:${weekStart.toISOString()}:${right.id}`) ||
       left.id.localeCompare(right.id),
   );
+  const matchesShape = (product: RecommendationProduct) =>
+    profile.bodyShape === null ||
+    product.eligibleShapes.includes(profile.bodyShape);
   const exact = active.filter(
     (product) =>
-      product.eligibleShapes.includes(profile.bodyShape) &&
+      matchesShape(product) &&
       product.eligibleSeasons.includes(profile.colourSeason),
   );
   const targetFamily = isColourSeason(profile.colourSeason)
@@ -57,12 +61,12 @@ export function selectWeeklyProducts({
   const family = active.filter(
     (product) =>
       targetFamily !== undefined &&
-      product.eligibleShapes.includes(profile.bodyShape) &&
+      matchesShape(product) &&
       !product.eligibleSeasons.includes(profile.colourSeason) &&
       hasSeasonFamily(product.eligibleSeasons, targetFamily),
   );
   const partial = active.filter((product) => {
-    const shapeMatch = product.eligibleShapes.includes(profile.bodyShape);
+    const shapeMatch = matchesShape(product);
     const seasonMatch = product.eligibleSeasons.includes(profile.colourSeason);
     if (!shapeMatch && !seasonMatch) return false;
     if (shapeMatch && seasonMatch) return false;
@@ -129,10 +133,6 @@ export function getSeasonFamily(season: ColourSeason): SeasonFamily {
   if (season.endsWith("_autumn")) return "autumn";
   if (season.endsWith("_winter")) return "winter";
   throw new Error(`Unsupported colour season: ${season}`);
-}
-
-function isColourSeason(value: string): value is ColourSeason {
-  return (colourSeasons as readonly string[]).includes(value);
 }
 
 function hasSeasonFamily(

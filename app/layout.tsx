@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "StyleSoul",
-  description: "Your Personal Style Intelligence",
+  description: "Find your colours and shape, and get three pieces picked for you each week.",
 };
 
 export default function RootLayout({

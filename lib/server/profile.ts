@@ -29,7 +29,15 @@ export async function saveStyleProfile({
   email: string;
   input: StyleProfileInput;
 }) {
-  const { analysisVersion, ...profileData } = deriveStyleProfile(input);
+  const profileData = deriveStyleProfile(input);
+  // A re-run that skips measurements keeps any measurements and silhouette
+  // saved earlier; only newly submitted measurements replace them.
+  // When measurements are submitted, an omitted weight clears the old one.
+  const { bodyShape, ...colourOnlyData } = profileData;
+  const updateData =
+    bodyShape === null
+      ? colourOnlyData
+      : { ...profileData, weightKg: profileData.weightKg ?? null };
 
   return prisma.$transaction(async (transaction) => {
     await assertAccountWritable(transaction, userId);
@@ -41,8 +49,8 @@ export async function saveStyleProfile({
 
     const profile = await transaction.styleProfile.upsert({
       where: { userId },
-      create: { userId, ...profileData, analysisVersion },
-      update: { ...profileData, analysisVersion },
+      create: { userId, ...profileData },
+      update: updateData,
     });
     await transaction.weeklyEdit.deleteMany({
       where: { userId, weekStart: { gte: mondayUtc(new Date()) } },

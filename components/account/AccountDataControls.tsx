@@ -10,7 +10,7 @@ export function AccountDataControls() {
 
   const deleteAccount = async () => {
     const confirmed = window.confirm(
-      "Permanently delete your StyleSoul account, profile, and weekly edits? This cannot be undone.",
+      "Delete your StyleSoul account, profile and weekly edits for good? You can't undo this.",
     );
     if (!confirmed) return;
 
@@ -46,7 +46,7 @@ export function AccountDataControls() {
     } catch {
       // The deletion response also clears the server-side session cookie.
     }
-    window.location.replace("/");
+    window.location.replace("/?deleted=1");
   };
 
   return (
@@ -55,9 +55,7 @@ export function AccountDataControls() {
         Your data
       </h2>
       <p className="mt-3 leading-7 text-cream/75">
-        Download a JSON copy of your authentication details, profile, weekly
-        edits, coarse funnel milestones, security metadata, and any catalogue
-        audit actions linked to your account.
+        Download everything we hold about you as a file.
       </p>
       <a
         href="/api/account/export"
@@ -70,12 +68,7 @@ export function AccountDataControls() {
       <div className="mt-10 border-t border-blush/30 pt-8">
         <h3 className="font-display text-2xl">Delete account</h3>
         <p id="delete-account-description" className="mt-3 leading-7 text-cream/75">
-          Permanently remove your sign-in identity, profile, weekly edits,
-          coarse funnel milestones, and photo-analysis rate-limit record.
-          Catalogue audit history is retained for accountability, but its link
-          to your account is removed.
-          A one-way deletion marker is retained to prevent an in-flight request
-          from recreating those records.
+          This deletes your account, profile and weekly edits for good.
         </p>
         <button
           type="button"

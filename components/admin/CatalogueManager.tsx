@@ -1,9 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
+import { flushSync } from "react-dom";
 import { bodyShapes } from "@/lib/body-shape/classify";
 import { colourSeasons } from "@/lib/colour-season/map";
+import { SEASON_LABELS, SHAPE_LABELS } from "@/lib/labels";
 import {
   garmentCategories,
   occasionTags,
@@ -33,6 +35,29 @@ type ProductView = {
 
 type Coverage = { shape: string; season: string; count: number };
 
+type FieldErrors = Record<string, string>;
+
+const COVERAGE_MINIMUM = 15;
+
+/** "Light spring" becomes "LSp": unique and short enough for a 12-column grid. */
+function shortSeason(label: string) {
+  const [modifier, season] = label.split(" ");
+  return `${modifier[0].toUpperCase()}${season[0].toUpperCase()}${season[1]}`;
+}
+
+/** Maps the API's zod issues onto form field names, first message wins. */
+function fieldErrorsFrom(
+  issues: Array<{ path: PropertyKey[]; message: string }> = [],
+): FieldErrors {
+  const errors: FieldErrors = {};
+  for (const issue of issues) {
+    const field = String(issue.path[0] ?? "");
+    const name = field === "priceCents" ? "price" : field;
+    errors[name] ??= issue.message;
+  }
+  return errors;
+}
+
 export function CatalogueManager({
   products,
   coverage,
@@ -43,12 +68,33 @@ export function CatalogueManager({
   const router = useRouter();
   const [editing, setEditing] = useState<ProductView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const formSection = useRef<HTMLDivElement>(null);
+
+  const counts = new Map(
+    coverage.map((bucket) => [`${bucket.shape}:${bucket.season}`, bucket.count]),
+  );
+
+  const startEditing = (product: ProductView) => {
+    flushSync(() => {
+      setEditing(product);
+      setFieldErrors({});
+      setSaved(false);
+    });
+    formSection.current?.scrollIntoView({ block: "start" });
+    formSection.current
+      ?.querySelector<HTMLInputElement>("input")
+      ?.focus({ preventScroll: true });
+  };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSaving(true);
+    setSaved(false);
     setError(null);
+    setFieldErrors({});
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const payload = {
@@ -76,10 +122,17 @@ export function CatalogueManager({
           body: JSON.stringify(payload),
         },
       );
-      const result = (await response.json()) as { message?: string };
-      if (!response.ok) throw new Error(result.message ?? "Could not save product");
+      const result = (await response.json()) as {
+        message?: string;
+        issues?: Array<{ path: PropertyKey[]; message: string }>;
+      };
+      if (!response.ok) {
+        setFieldErrors(fieldErrorsFrom(result.issues));
+        throw new Error(result.message ?? "Could not save product");
+      }
       setEditing(null);
       formElement.reset();
+      setSaved(true);
       router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save product");
@@ -88,22 +141,31 @@ export function CatalogueManager({
     }
   };
 
-  const deactivate = async (product: ProductView) => {
+  const setStatus = async (product: ProductView, status: "active" | "inactive") => {
+    const action = status === "active" ? "activate" : "deactivate";
+    if (
+      status === "inactive" &&
+      !window.confirm(
+        `Deactivate ${product.brand} ${product.title}? It will stop appearing in weekly edits until you activate it again.`,
+      )
+    ) {
+      return;
+    }
     setError(null);
     try {
       const response = await fetch(`/api/admin/products/${product.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "inactive" }),
+        body: JSON.stringify({ status }),
       });
       if (!response.ok) {
         const result = (await response.json()) as { message?: string };
-        throw new Error(result.message ?? "Could not deactivate product");
+        throw new Error(result.message ?? `Could not ${action} product`);
       }
       router.refresh();
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : "Could not deactivate product",
+        caught instanceof Error ? caught.message : `Could not ${action} product`,
       );
     }
   };
@@ -116,36 +178,64 @@ export function CatalogueManager({
 
         <section aria-labelledby="coverage-heading" className="mt-10">
           <h2 id="coverage-heading" className="font-display text-2xl">
-            Shape × season coverage
+            Coverage
           </h2>
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-5">
-            {coverage.map((bucket) => (
-              <div
-                key={`${bucket.shape}:${bucket.season}`}
-                className={`rounded border px-3 py-2 text-xs ${
-                  bucket.count < 15
-                    ? "border-blush/40 bg-blush/10"
-                    : "border-sage/40 bg-sage/10"
-                }`}
-              >
-                <p className="font-semibold capitalize">
-                  {bucket.shape.replaceAll("_", " ")}
-                </p>
-                <p className="mt-1 capitalize text-cream/65">
-                  {bucket.season.replaceAll("_", " ")} · {bucket.count} items
-                </p>
-                <p className="mt-1 text-cream/65">
-                  {bucket.count < 15
-                    ? "Below 15-item minimum"
-                    : "Meets 15-item minimum"}
-                </p>
-              </div>
-            ))}
+          <p id="coverage-legend" className="mt-2 text-sm text-cream/70">
+            Active products for each shape and season. Minimum {COVERAGE_MINIMUM}.{" "}
+            <span className="ml-2 inline-block size-3 rounded-sm bg-sage/40 align-middle" aria-hidden />{" "}
+            Meets minimum
+            <span className="ml-3 inline-block size-3 rounded-sm bg-blush/40 align-middle" aria-hidden />{" "}
+            Below minimum
+          </p>
+          <div className="mt-4 overflow-x-auto">
+            <table
+              aria-labelledby="coverage-heading"
+              aria-describedby="coverage-legend"
+              className="border-separate border-spacing-1 text-xs"
+            >
+              <thead>
+                <tr>
+                  <th scope="col" className="px-2 text-left font-normal text-cream/60">
+                    Shape
+                  </th>
+                  {colourSeasons.map((season) => (
+                    <th key={season} scope="col" className="px-1 font-semibold">
+                      <abbr title={SEASON_LABELS[season]} aria-hidden>
+                        {shortSeason(SEASON_LABELS[season])}
+                      </abbr>
+                      <span className="sr-only">{SEASON_LABELS[season]}</span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {bodyShapes.map((shape) => (
+                  <tr key={shape}>
+                    <th scope="row" className="whitespace-nowrap px-2 text-left font-semibold">
+                      {SHAPE_LABELS[shape]}
+                    </th>
+                    {colourSeasons.map((season) => {
+                      const count = counts.get(`${shape}:${season}`) ?? 0;
+                      return (
+                        <td
+                          key={season}
+                          className={`min-w-9 rounded px-2 py-1.5 text-center tabular-nums ${
+                            count < COVERAGE_MINIMUM ? "bg-blush/25" : "bg-sage/25"
+                          }`}
+                        >
+                          {count}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </section>
 
         <section className="mt-12 grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(340px,0.7fr)]">
-          <div>
+          <div ref={formSection} className="scroll-mt-4">
             <h2 className="font-display text-2xl">
               {editing ? `Edit ${editing.title}` : "Add a product"}
             </h2>
@@ -155,26 +245,39 @@ export function CatalogueManager({
               className="mt-5 space-y-5 rounded border border-cream/15 bg-cream/[0.03] p-5"
             >
               <div className="grid gap-4 sm:grid-cols-2">
-                <TextField name="brand" label="Brand" defaultValue={editing?.brand} />
-                <TextField name="title" label="Title" defaultValue={editing?.title} />
+                <TextField
+                  name="brand"
+                  label="Brand"
+                  defaultValue={editing?.brand}
+                  error={fieldErrors.brand}
+                />
+                <TextField
+                  name="title"
+                  label="Title"
+                  defaultValue={editing?.title}
+                  error={fieldErrors.title}
+                />
               </div>
               <TextField
                 name="description"
-                label="Description"
+                label="Description (optional)"
                 defaultValue={editing?.description ?? ""}
                 multiline
+                error={fieldErrors.description}
               />
               <TextField
                 name="imageUrl"
                 label="HTTPS image URL"
                 type="url"
                 defaultValue={editing?.imageUrl}
+                error={fieldErrors.imageUrl}
               />
               <TextField
                 name="productUrl"
                 label="HTTPS retailer URL"
                 type="url"
                 defaultValue={editing?.productUrl}
+                error={fieldErrors.productUrl}
               />
               <div className="grid gap-4 sm:grid-cols-2">
                 <TextField
@@ -184,43 +287,52 @@ export function CatalogueManager({
                   step="0.01"
                   min="0.01"
                   defaultValue={editing ? String(editing.priceCents / 100) : undefined}
+                  error={fieldErrors.price}
                 />
                 <SelectField
                   name="status"
                   label="Status"
                   options={productStatuses}
                   defaultValue={editing?.status}
+                  error={fieldErrors.status}
                 />
                 <SelectField
                   name="garmentCategory"
                   label="Garment category"
                   options={garmentCategories}
                   defaultValue={editing?.garmentCategory}
+                  error={fieldErrors.garmentCategory}
                 />
                 <SelectField
                   name="priceTier"
                   label="Price tier"
                   options={priceTiers}
                   defaultValue={editing?.priceTier}
+                  error={fieldErrors.priceTier}
                 />
               </div>
               <CheckGroup
                 name="eligibleShapes"
-                label="Eligible shapes"
+                label="Eligible shapes (choose at least one)"
                 options={bodyShapes}
+                labels={SHAPE_LABELS}
                 selected={editing?.eligibleShapes}
+                error={fieldErrors.eligibleShapes}
               />
               <CheckGroup
                 name="eligibleSeasons"
-                label="Eligible seasons"
+                label="Eligible seasons (choose at least one)"
                 options={colourSeasons}
+                labels={SEASON_LABELS}
                 selected={editing?.eligibleSeasons}
+                error={fieldErrors.eligibleSeasons}
               />
               <CheckGroup
                 name="occasionTags"
-                label="Occasions"
+                label="Occasions (choose at least one)"
                 options={occasionTags}
                 selected={editing?.occasionTags}
+                error={fieldErrors.occasionTags}
               />
 
               {error ? <p role="alert" className="text-sm text-blush">{error}</p> : null}
@@ -235,7 +347,11 @@ export function CatalogueManager({
                 {editing ? (
                   <button
                     type="button"
-                    onClick={() => setEditing(null)}
+                    onClick={() => {
+                      setEditing(null);
+                      setFieldErrors({});
+                      setSaved(false);
+                    }}
                     className="min-h-11 rounded border border-cream/25 px-5 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                   >
                     Cancel
@@ -243,6 +359,9 @@ export function CatalogueManager({
                 ) : null}
               </div>
             </form>
+            <p role="status" aria-live="polite" className="mt-3 text-sm text-sage">
+              {saved ? "Saved" : ""}
+            </p>
           </div>
 
           <div>
@@ -259,7 +378,7 @@ export function CatalogueManager({
                     </div>
                     <button
                       type="button"
-                      onClick={() => setEditing(product)}
+                      onClick={() => startEditing(product)}
                       className="min-h-11 min-w-11 rounded text-sm text-gold underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                     >
                       Edit
@@ -268,12 +387,20 @@ export function CatalogueManager({
                   {product.status === "active" ? (
                     <button
                       type="button"
-                      onClick={() => void deactivate(product)}
+                      onClick={() => void setStatus(product, "inactive")}
                     className="mt-3 min-h-11 rounded text-xs text-blush underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                     >
                       Deactivate
                     </button>
-                  ) : null}
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void setStatus(product, "active")}
+                      className="mt-3 min-h-11 rounded text-xs text-gold underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                    >
+                      Activate
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -289,24 +416,41 @@ function TextField({
   label,
   defaultValue,
   multiline = false,
+  error,
   ...inputProps
 }: {
   name: string;
   label: string;
   defaultValue?: string;
   multiline?: boolean;
+  error?: string;
 } & Omit<React.InputHTMLAttributes<HTMLInputElement>, "name" | "defaultValue">) {
   const className = "mt-1 min-h-11 w-full rounded border border-cream/20 bg-charcoal px-3 py-2 text-sm text-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold";
+  const errorProps = {
+    "aria-invalid": error ? true : undefined,
+    "aria-describedby": error ? `${name}-error` : undefined,
+  };
   return (
-    <label className="block text-sm text-cream/75">
-      {label}
-      {multiline ? (
-        <textarea name={name} defaultValue={defaultValue} className={className} rows={3} />
-      ) : (
-        <input name={name} defaultValue={defaultValue} required className={className} {...inputProps} />
-      )}
-    </label>
+    <div>
+      <label className="block text-sm text-cream/75">
+        {label}
+        {multiline ? (
+          <textarea name={name} defaultValue={defaultValue} className={className} rows={3} {...errorProps} />
+        ) : (
+          <input name={name} defaultValue={defaultValue} required className={className} {...errorProps} {...inputProps} />
+        )}
+      </label>
+      <FieldError name={name} error={error} />
+    </div>
   );
+}
+
+function FieldError({ name, error }: { name: string; error?: string }) {
+  return error ? (
+    <span id={`${name}-error`} className="mt-1 block text-xs text-blush">
+      {error}
+    </span>
+  ) : null;
 }
 
 function SelectField({
@@ -314,25 +458,32 @@ function SelectField({
   label,
   options,
   defaultValue,
+  error,
 }: {
   name: string;
   label: string;
   options: readonly string[];
   defaultValue?: string;
+  error?: string;
 }) {
   return (
-    <label className="block text-sm text-cream/75">
-      {label}
-      <select
-        name={name}
-        defaultValue={defaultValue ?? options[0]}
-        className="mt-1 min-h-11 w-full rounded border border-cream/20 bg-charcoal px-3 py-2 text-sm text-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-      >
-        {options.map((option) => (
-          <option key={option} value={option}>{option.replaceAll("_", " ")}</option>
-        ))}
-      </select>
-    </label>
+    <div>
+      <label className="block text-sm text-cream/75">
+        {label}
+        <select
+          name={name}
+          defaultValue={defaultValue ?? options[0]}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${name}-error` : undefined}
+          className="mt-1 min-h-11 w-full rounded border border-cream/20 bg-charcoal px-3 py-2 text-sm text-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+        >
+          {options.map((option) => (
+            <option key={option} value={option}>{option.replaceAll("_", " ")}</option>
+          ))}
+        </select>
+      </label>
+      <FieldError name={name} error={error} />
+    </div>
   );
 }
 
@@ -340,19 +491,23 @@ function CheckGroup({
   name,
   label,
   options,
+  labels,
   selected = [],
+  error,
 }: {
   name: string;
   label: string;
   options: readonly string[];
+  labels?: Record<string, string>;
   selected?: string[];
+  error?: string;
 }) {
   return (
-    <fieldset>
+    <fieldset aria-describedby={error ? `${name}-error` : undefined}>
       <legend className="text-sm text-cream/75">{label}</legend>
       <div className="mt-2 flex flex-wrap gap-2">
         {options.map((option) => (
-          <label key={option} className="flex min-h-11 items-center rounded border border-cream/15 px-3 py-2 text-xs capitalize">
+          <label key={option} className={`flex min-h-11 items-center rounded border border-cream/15 px-3 py-2 text-xs ${labels ? "" : "capitalize"}`}>
             <input
               type="checkbox"
               name={name}
@@ -360,10 +515,11 @@ function CheckGroup({
               defaultChecked={selected.includes(option)}
               className="mr-2 accent-gold"
             />
-            {option.replaceAll("_", " ")}
+            {labels?.[option] ?? option.replaceAll("_", " ")}
           </label>
         ))}
       </div>
+      <FieldError name={name} error={error} />
     </fieldset>
   );
 }

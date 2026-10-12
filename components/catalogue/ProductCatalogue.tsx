@@ -2,12 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
-import { Avatar } from "@/components/avatar/Avatar";
-import {
-  SEASON_LABELS,
-  SEASON_PALETTES,
-  SHAPE_LABELS,
-} from "@/components/avatar/palettes";
 import type { BodyShape } from "@/lib/body-shape/classify";
 import type { ColourSeason } from "@/lib/colour-season/map";
 import {
@@ -32,29 +26,86 @@ export type CatalogueProduct = {
 };
 
 const sortOptions: Array<{ value: CatalogueSortKey; label: string }> = [
-  { value: "name", label: "Alphabetical" },
-  { value: "brand", label: "Designer / provider" },
-  { value: "silhouette", label: "Silhouette" },
-  { value: "colour", label: "Colour season" },
+  { value: "name", label: "A–Z" },
+  { value: "brand", label: "Brand" },
   { value: "price", label: "Price" },
 ];
 
-export function ProductCatalogue({ products }: { products: CatalogueProduct[] }) {
+const PAGE_SIZE = 24;
+const ALL_CATEGORIES = "all";
+
+const selectClass =
+  "mt-2 block min-h-11 rounded-lg border border-cream/20 bg-charcoal px-3 py-2 text-sm normal-case tracking-normal text-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold";
+
+export function ProductCatalogue({
+  products,
+  season = null,
+  shape = null,
+}: {
+  products: CatalogueProduct[];
+  season?: ColourSeason | null;
+  shape?: BodyShape | null;
+}) {
   const [sortKey, setSortKey] = useState<CatalogueSortKey>("name");
   const [direction, setDirection] = useState<CatalogueSortDirection>("asc");
-  const sortedProducts = useMemo(
-    () => sortCatalogueProducts(products, sortKey, direction),
-    [direction, products, sortKey],
+  const [onlySuitsMe, setOnlySuitsMe] = useState(season !== null);
+  const [category, setCategory] = useState(ALL_CATEGORIES);
+  const categories = useMemo(
+    () => [...new Set(products.map((product) => product.garmentCategory))].sort(),
+    [products],
   );
+  const sortedProducts = useMemo(
+    () =>
+      sortCatalogueProducts(
+        products.filter(
+          (product) =>
+            (category === ALL_CATEGORIES || product.garmentCategory === category) &&
+            (!onlySuitsMe || suits(product, season, shape)),
+        ),
+        sortKey,
+        direction,
+      ),
+    [category, direction, onlySuitsMe, products, season, shape, sortKey],
+  );
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   return (
     <>
-      <div className="sticky top-0 z-20 mt-8 border-y border-cream/10 bg-charcoal/95 py-4 backdrop-blur">
+      <div className="z-20 mt-8 border-y border-cream/10 bg-charcoal/95 py-4 backdrop-blur sm:sticky sm:top-0">
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <p className="pb-2 text-sm text-cream/60">
-            {products.length} {products.length === 1 ? "piece" : "pieces"}
-          </p>
-          <div className="flex items-end gap-2">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-2 text-sm text-cream/60">
+            <p>
+              {sortedProducts.length}{" "}
+              {sortedProducts.length === 1 ? "piece" : "pieces"}
+            </p>
+            {season ? (
+              <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-cream">
+                <input
+                  type="checkbox"
+                  checked={onlySuitsMe}
+                  onChange={(event) => setOnlySuitsMe(event.target.checked)}
+                  className="h-4 w-4 accent-gold"
+                />
+                Only pieces that suit me
+              </label>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="text-xs uppercase tracking-[0.18em] text-cream/60">
+              Category
+              <select
+                value={category}
+                onChange={(event) => setCategory(event.target.value)}
+                className={selectClass}
+              >
+                <option value={ALL_CATEGORIES}>All</option>
+                {categories.map((value) => (
+                  <option key={value} value={value}>
+                    {categoryLabel(value)}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="text-xs uppercase tracking-[0.18em] text-cream/60">
               Sort by
               <select
@@ -62,7 +113,7 @@ export function ProductCatalogue({ products }: { products: CatalogueProduct[] })
                 onChange={(event) =>
                   setSortKey(event.target.value as CatalogueSortKey)
                 }
-                className="mt-2 block min-h-11 rounded-lg border border-cream/20 bg-charcoal px-3 py-2 text-sm normal-case tracking-normal text-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                className={selectClass}
                 aria-label="Sort products by"
               >
                 {sortOptions.map((option) => (
@@ -78,7 +129,11 @@ export function ProductCatalogue({ products }: { products: CatalogueProduct[] })
                 setDirection((current) => (current === "asc" ? "desc" : "asc"))
               }
               className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-cream/20 px-3 py-2 text-sm text-cream transition hover:border-gold hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-              aria-label={direction === "asc" ? "Sort descending" : "Sort ascending"}
+              aria-label={
+                direction === "asc"
+                  ? "Ascending, switch to descending"
+                  : "Descending, switch to ascending"
+              }
               title={direction === "asc" ? "Ascending" : "Descending"}
             >
               {direction === "asc" ? (
@@ -95,42 +150,77 @@ export function ProductCatalogue({ products }: { products: CatalogueProduct[] })
       </div>
 
       {sortedProducts.length > 0 ? (
-        <ul className="mt-6 space-y-5" aria-label="Product catalogue">
-          {sortedProducts.map((product) => (
-            <li key={product.id}>
-              <CatalogueProductCard product={product} />
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="mt-6 space-y-5" aria-label="Product catalogue">
+            {sortedProducts.slice(0, visibleCount).map((product) => (
+              <li key={product.id}>
+                <CatalogueProductCard
+                  product={product}
+                  suitsColours={season !== null && product.eligibleSeasons.includes(season)}
+                  suitsShape={shape !== null && product.eligibleShapes.includes(shape)}
+                />
+              </li>
+            ))}
+          </ul>
+          {visibleCount < sortedProducts.length ? (
+            <div className="mt-8 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
+                className="inline-flex min-h-11 items-center rounded-lg border border-cream/20 px-5 py-2 text-sm text-cream transition hover:border-gold hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+              >
+                Show more
+              </button>
+            </div>
+          ) : null}
+        </>
       ) : (
         <div className="mt-8 rounded-xl border border-cream/15 bg-cream/[0.03] p-8 text-center">
-          <p className="font-display text-2xl">The catalogue is being curated</p>
-          <p className="mt-2 text-sm text-cream/65">Check back soon for new pieces.</p>
+          <p className="font-display text-2xl">Nothing here yet</p>
+          {products.length > 0 ? (
+            <p className="mt-2 text-sm text-cream/65">
+              Try another category or show all pieces.
+            </p>
+          ) : null}
         </div>
       )}
     </>
   );
 }
 
-function CatalogueProductCard({ product }: { product: CatalogueProduct }) {
-  const iconSeason = product.eligibleSeasons[0] ?? "warm_spring";
+function suits(
+  product: CatalogueProduct,
+  season: ColourSeason | null,
+  shape: BodyShape | null,
+) {
+  return (
+    (season === null || product.eligibleSeasons.includes(season)) &&
+    (shape === null || product.eligibleShapes.includes(shape))
+  );
+}
 
+function categoryLabel(value: string) {
+  const label = value.replaceAll("_", " ");
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function CatalogueProductCard({
+  product,
+  suitsColours,
+  suitsShape,
+}: {
+  product: CatalogueProduct;
+  suitsColours: boolean;
+  suitsShape: boolean;
+}) {
   return (
     <article className="group overflow-hidden rounded-xl border border-cream/15 bg-cream/[0.03] sm:grid sm:grid-cols-[220px_minmax(0,1fr)]">
       <div
-        className="relative aspect-[4/3] bg-cream/5 bg-cover bg-center sm:aspect-auto sm:min-h-64"
+        className="aspect-[4/3] bg-cream/5 bg-cover bg-center sm:aspect-auto sm:min-h-64"
         style={{ backgroundImage: `url(${JSON.stringify(product.imageUrl)})` }}
         role="img"
         aria-label={product.title}
-      >
-        <div className="absolute bottom-3 right-3 flex -space-x-1 rounded-full border border-cream/20 bg-charcoal/90 px-2 py-1 shadow-xl backdrop-blur">
-          {product.eligibleShapes.map((shape) => (
-            <span key={shape} title={SHAPE_LABELS[shape]} className="block w-8 overflow-hidden">
-              <Avatar shape={shape} season={iconSeason} size={28} pulse={false} />
-            </span>
-          ))}
-        </div>
-      </div>
+      />
 
       <div className="flex min-w-0 flex-col justify-between p-5 sm:p-6">
         <div>
@@ -157,33 +247,20 @@ function CatalogueProductCard({ product }: { product: CatalogueProduct }) {
             </p>
           ) : null}
 
-          <dl className="mt-5 grid gap-4 text-sm lg:grid-cols-2">
-            <div>
-              <dt className="text-xs uppercase tracking-[0.16em] text-cream/45">
-                Silhouettes
-              </dt>
-              <dd className="mt-1.5 text-cream/80">
-                {product.eligibleShapes.map((shape) => SHAPE_LABELS[shape]).join(" · ")}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase tracking-[0.16em] text-cream/45">
-                Colour seasons
-              </dt>
-              <dd className="mt-1.5 flex flex-wrap gap-2">
-                {product.eligibleSeasons.map((season) => (
-                  <span key={season} className="inline-flex items-center gap-1.5 text-cream/80">
-                    <span
-                      aria-hidden="true"
-                      className="h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: SEASON_PALETTES[season].accent }}
-                    />
-                    {SEASON_LABELS[season]}
-                  </span>
-                ))}
-              </dd>
-            </div>
-          </dl>
+          {suitsColours || suitsShape ? (
+            <ul className="mt-4 flex flex-wrap gap-2 text-xs text-cream/80">
+              {suitsColours ? (
+                <li className="rounded-full border border-gold/40 px-3 py-1">
+                  Suits your colours
+                </li>
+              ) : null}
+              {suitsShape ? (
+                <li className="rounded-full border border-gold/40 px-3 py-1">
+                  Suits your shape
+                </li>
+              ) : null}
+            </ul>
+          ) : null}
         </div>
 
         <div className="mt-6 flex flex-wrap items-end justify-between gap-4 border-t border-cream/10 pt-4">

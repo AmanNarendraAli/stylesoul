@@ -1,14 +1,22 @@
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { AccountDataControls } from "@/components/account/AccountDataControls";
 
 export default function AccountPage() {
   return (
     <main className="min-h-screen bg-charcoal px-6 py-16 text-cream">
       <section className="mx-auto max-w-4xl">
-        <h1 className="font-display text-5xl">Account</h1>
+        <Link
+          href="/profile"
+          className="inline-flex min-h-11 items-center gap-2 text-sm text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+        >
+          <ArrowLeft aria-hidden="true" size={16} />
+          Back to profile
+        </Link>
+        <h1 className="mt-4 font-display text-5xl">Account</h1>
         <p className="mt-6 text-cream/75">
-          Subscription and payment management are not available in the current
-          web MVP. StyleSoul does not collect charges through this app.
+          StyleSoul is free during the preview, so there&apos;s nothing to
+          manage here yet.
         </p>
         <Link
           href="/legal"

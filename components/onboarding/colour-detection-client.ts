@@ -1,46 +1,48 @@
 /**
- * Client-only glue for photo colour detection. This is the browser layer that
- * the pure `lib/colour-detection` pipeline plugs into — canvas decoding +
- * MediaPipe landmarking live here so `lib/` stays browser-free and portable to
- * React Native (which swaps this file for a native-camera equivalent).
+ * Client-only glue for photo colour detection: canvas decoding plus MediaPipe
+ * face landmarking, hair segmentation and image embedding, feeding the pure
+ * `lib/colour-detection` pipeline.
  */
-import {
-  detectColouring,
-  type DetectedColouring,
-} from "@/lib/colour-detection/detect";
-import type { PixelSource } from "@/lib/colour-detection/regions";
+import type { RgbaImage } from "@/lib/colour-detection/crops";
+import type { DetectedColouring, Embeddings } from "@/lib/colour-detection/detect";
+import type { HairMask, PixelSource, Point } from "@/lib/colour-detection/regions";
+import type {
+  FaceLandmarker,
+  ImageEmbedder,
+  ImageSegmenter,
+} from "@mediapipe/tasks-vision";
 
 // Max edge length we feed the landmarker. Big enough for accurate landmarks,
 // small enough to keep detection fast and memory light.
 const CLIENT_MAX_EDGE = 512;
-// Downscaled edge for the server-fallback payload (keeps the POST small).
-const FALLBACK_MAX_EDGE = 160;
 
 // MediaPipe assets. WASM via CDN (cached aggressively after first load); the
 // face landmarker model is the 478-point mesh with iris refinement built in.
+// calibration/scripts/extract.py must use the same models.
 const WASM_BASE =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
-const MODEL_URL =
+const LANDMARKER_URL =
   "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+const HAIR_SEGMENTER_URL =
+  "https://storage.googleapis.com/mediapipe-models/image_segmenter/hair_segmenter/float32/1/hair_segmenter.tflite";
+const EMBEDDER_URL =
+  "https://storage.googleapis.com/mediapipe-models/image_embedder/mobilenet_v3_small/float32/1/mobilenet_v3_small.tflite";
 
 export type PhotoDetectionOutcome =
   | { ok: true; detected: DetectedColouring; source: "photo" }
   | {
       ok: false;
-      kind: "quality" | "fallback" | "error";
+      kind: "quality" | "unavailable" | "error";
       message: string;
     };
 
 /**
- * Run the full client pipeline on a chosen file: decode → landmark → quality
- * gate → detect. If landmarking is unavailable (old browser, WASM blocked) we
- * fall back to the self-hosted server route. Any hard failure resolves to a
- * non-ok outcome so the caller can route the user to the manual screen.
+ * Run the full on-device pipeline on a captured photo: decode → landmark →
+ * quality gate → detect. Any failure (including models that can't load, e.g.
+ * an old browser or blocked WASM) resolves to a non-ok outcome so the caller
+ * can route the user to the manual swatches.
  */
-export async function detectFromPhoto(
-  file: File,
-  getServerFallbackConsent: () => boolean = () => false,
-): Promise<PhotoDetectionOutcome> {
+export async function detectFromPhoto(file: File): Promise<PhotoDetectionOutcome> {
   let imageData: ImageData;
   try {
     imageData = await decodeToImageData(file, CLIENT_MAX_EDGE);
@@ -49,15 +51,23 @@ export async function detectFromPhoto(
   }
 
   try {
-    const landmarker = await loadFaceLandmarker();
-    const result = landmarker.detect(toCanvas(imageData));
-    const faces = result.faceLandmarks ?? [];
+    const [{ landmarker, segmenter, embedder }, lib] = await Promise.all([
+      loadModels(),
+      // The classifier weights are large; only fetch them once a photo is chosen.
+      loadPipeline(),
+    ]);
+    const canvas = toCanvas(imageData);
+    const faces = landmarker.detect(canvas).faceLandmarks ?? [];
     const landmarks = faces[0]?.map((p) => ({ x: p.x, y: p.y })) ?? [];
+    const source = lib.pixelSourceFromRgba(imageData.data, imageData.width, imageData.height);
+    const mask = segmenter ? hairMask(segmenter, canvas) : undefined;
 
-    const detection = detectColouring(
-      pixelSourceFromImageData(imageData),
+    const detection = lib.detectColouring(
+      source,
       landmarks,
       faces.length,
+      mask,
+      faces.length === 1 ? embed(embedder, lib, source, landmarks, mask) : {},
     );
 
     if (!detection.ok) {
@@ -65,93 +75,15 @@ export async function detectFromPhoto(
     }
     return { ok: true, detected: detection.detected, source: "photo" };
   } catch {
-    if (!getServerFallbackConsent()) {
-      return {
-        ok: false,
-        kind: "fallback",
-        message:
-          "On-device photo detection is unavailable. Enable server fallback or choose your swatches manually.",
-      };
-    }
-    return detectViaServerFallback(file, getServerFallbackConsent);
-  }
-}
-
-async function detectViaServerFallback(
-  file: File,
-  getServerFallbackConsent: () => boolean,
-): Promise<PhotoDetectionOutcome> {
-  try {
-    const small = await decodeToImageData(file, FALLBACK_MAX_EDGE);
-    if (!getServerFallbackConsent()) {
-      return {
-        ok: false,
-        kind: "fallback",
-        message:
-          "Server fallback was not used because consent is off. Choose your swatches manually.",
-      };
-    }
-    const response = await fetch("/api/analysis", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        consent: true,
-        width: small.width,
-        height: small.height,
-        pixels: Array.from(small.data),
-      }),
-    });
-    return readFallbackResponse(response);
-  } catch {
     return {
       ok: false,
-      kind: "fallback",
-      message: "Photo detection is unavailable right now.",
+      kind: "unavailable",
+      message: "Photo suggestions aren't available on this device right now.",
     };
   }
-}
-
-export async function readFallbackResponse(
-  response: Response,
-): Promise<PhotoDetectionOutcome> {
-  if (response.ok) {
-    const payload = (await response.json()) as { detected: DetectedColouring };
-    return { ok: true, detected: payload.detected, source: "photo" };
-  }
-
-  if (response.status === 422) {
-    const payload = (await response.json().catch(() => null)) as {
-      message?: string;
-    } | null;
-    return {
-      ok: false,
-      kind: "quality",
-      message:
-        payload?.message ??
-        "We couldn't confidently estimate your colouring from this photo.",
-    };
-  }
-
-  return {
-    ok: false,
-    kind: "fallback",
-    message: "Photo detection is unavailable right now.",
-  };
 }
 
 // --- canvas helpers -------------------------------------------------------
-
-function pixelSourceFromImageData(imageData: ImageData): PixelSource {
-  const { data, width, height } = imageData;
-  return {
-    width,
-    height,
-    getPixel: (x, y) => {
-      const i = (y * width + x) * 4;
-      return { r: data[i], g: data[i + 1], b: data[i + 2] };
-    },
-  };
-}
 
 async function decodeToImageData(
   file: File,
@@ -180,34 +112,112 @@ function toCanvas(imageData: ImageData): HTMLCanvasElement {
   return canvas;
 }
 
+type Pipeline = Awaited<ReturnType<typeof loadPipeline>>;
+
+function loadPipeline() {
+  return Promise.all([
+    import("@/lib/colour-detection/detect"),
+    import("@/lib/colour-detection/crops"),
+    import("@/lib/colour-detection/regions"),
+  ]).then(([detect, crops, regions]) => ({ ...detect, ...crops, ...regions }));
+}
+
+/** Embeds the same crops the classifier was trained on (see crops.ts). */
+function embed(
+  embedder: ImageEmbedder,
+  lib: Pipeline,
+  source: PixelSource,
+  landmarks: Point[],
+  mask: HairMask | undefined,
+): Embeddings {
+  const vector = (image: RgbaImage) =>
+    embedder.embed(
+      toCanvas(new ImageData(image.data, image.width, image.height)),
+    ).embeddings[0]?.floatEmbedding;
+  const face = lib.faceCrop(source, landmarks);
+  return {
+    face: face ? vector(face) : undefined,
+    hair: mask ? vector(lib.hairOnly(source, mask)) : undefined,
+  };
+}
+
+/** The hair segmenter's last confidence mask is "hair", at canvas size. */
+function hairMask(segmenter: ImageSegmenter, canvas: HTMLCanvasElement): HairMask {
+  const result = segmenter.segment(canvas);
+  const mask = result.confidenceMasks?.at(-1);
+  const data = mask?.getAsFloat32Array().slice();
+  result.close();
+  return (x, y) => data?.[y * canvas.width + x] ?? 0;
+}
+
 // --- MediaPipe loader (lazy, cached) --------------------------------------
 
-let landmarkerPromise: Promise<FaceLandmarkerLike> | null = null;
+type Models = {
+  landmarker: FaceLandmarker;
+  segmenter: ImageSegmenter | null;
+  embedder: ImageEmbedder;
+};
 
-function loadFaceLandmarker(): Promise<FaceLandmarkerLike> {
-  if (!landmarkerPromise) {
-    landmarkerPromise = (async () => {
+let modelsPromise: Promise<Models> | null = null;
+
+function loadModels(): Promise<Models> {
+  if (!modelsPromise) {
+    modelsPromise = (async () => {
       const vision = await import("@mediapipe/tasks-vision");
       const fileset = await vision.FilesetResolver.forVisionTasks(WASM_BASE);
-      return vision.FaceLandmarker.createFromOptions(fileset, {
-        baseOptions: { modelAssetPath: MODEL_URL },
-        runningMode: "IMAGE",
-        // Detect up to 2 faces so the quality gate can reject multi-face shots.
-        numFaces: 2,
-      });
+      const [landmarker, segmenter, embedder] = await Promise.all([
+        vision.FaceLandmarker.createFromOptions(fileset, {
+          baseOptions: { modelAssetPath: LANDMARKER_URL },
+          runningMode: "IMAGE",
+          // Detect up to 2 faces so the quality gate can reject multi-face shots.
+          numFaces: 2,
+        }),
+        // Hair is optional: without the segmenter, hair is left to the user.
+        vision.ImageSegmenter.createFromOptions(fileset, {
+          baseOptions: { modelAssetPath: HAIR_SEGMENTER_URL },
+          runningMode: "IMAGE",
+          outputConfidenceMasks: true,
+          outputCategoryMask: false,
+        }).catch(() => null),
+        // Must match calibration/scripts/embed.py.
+        vision.ImageEmbedder.createFromOptions(fileset, {
+          baseOptions: { modelAssetPath: EMBEDDER_URL },
+          runningMode: "IMAGE",
+          l2Normalize: true,
+          quantize: false,
+        }),
+      ]);
+      return { landmarker, segmenter, embedder };
     })().catch((err) => {
-      // Reset so a later attempt (or the server fallback) can retry cleanly.
-      landmarkerPromise = null;
+      // Reset so a later attempt can retry cleanly.
+      modelsPromise = null;
       throw err;
     });
   }
-  return landmarkerPromise;
+  return modelsPromise;
 }
 
-// Minimal structural type so this module type-checks against the parts of the
-// MediaPipe API we use without depending on its full type surface.
-type FaceLandmarkerLike = {
-  detect: (image: HTMLCanvasElement) => {
-    faceLandmarks?: { x: number; y: number }[][];
-  };
-};
+let videoLandmarkerPromise: Promise<FaceLandmarker> | null = null;
+
+/**
+ * A separate VIDEO-mode landmarker for live camera guidance (a landmarker's
+ * running mode is fixed per instance). Shares the WASM fileset and model.
+ */
+export function loadVideoLandmarker(): Promise<FaceLandmarker> {
+  if (!videoLandmarkerPromise) {
+    videoLandmarkerPromise = (async () => {
+      const vision = await import("@mediapipe/tasks-vision");
+      const fileset = await vision.FilesetResolver.forVisionTasks(WASM_BASE);
+      return vision.FaceLandmarker.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: LANDMARKER_URL },
+        runningMode: "VIDEO",
+        // Two faces so guidance can ask for just one.
+        numFaces: 2,
+      });
+    })().catch((err) => {
+      videoLandmarkerPromise = null;
+      throw err;
+    });
+  }
+  return videoLandmarkerPromise;
+}

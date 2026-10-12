@@ -1,21 +1,13 @@
 import { NextResponse } from "next/server";
 import { reportServerError } from "@/lib/observability/redact";
 import { deleteAccountDatabaseData } from "@/lib/server/account-data";
-import { getAuthenticatedUserState } from "@/lib/server/auth";
+import { requireUser } from "@/lib/server/require-user";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export async function DELETE() {
-  const auth = await getAuthenticatedUserState();
-  if (!auth.available) {
-    return NextResponse.json(
-      { message: "Authentication unavailable" },
-      { status: 503 },
-    );
-  }
-  if (!auth.user) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
 
   const admin = getSupabaseAdminClient();
   if (!admin) {
@@ -26,10 +18,10 @@ export async function DELETE() {
   }
 
   try {
-    await deleteAccountDatabaseData(auth.user.id);
+    await deleteAccountDatabaseData(user.id);
   } catch (error) {
     reportServerError("account_database_deletion_failed", error, {
-      userId: auth.user.id,
+      userId: user.id,
     });
     return NextResponse.json(
       { message: "Account deletion failed" },
@@ -37,10 +29,10 @@ export async function DELETE() {
     );
   }
 
-  const { error } = await admin.auth.admin.deleteUser(auth.user.id);
+  const { error } = await admin.auth.admin.deleteUser(user.id);
   if (error && error.status !== 404) {
     reportServerError("account_auth_deletion_failed", error, {
-      userId: auth.user.id,
+      userId: user.id,
     });
     return NextResponse.json(
       { message: "Account sign-in deletion did not complete. Retry the request." },
@@ -54,12 +46,12 @@ export async function DELETE() {
     });
     if (signOutError) {
       reportServerError("account_session_cleanup_failed", signOutError, {
-        userId: auth.user.id,
+        userId: user.id,
       });
     }
   } catch (error) {
     reportServerError("account_session_cleanup_failed", error, {
-      userId: auth.user.id,
+      userId: user.id,
     });
   }
 

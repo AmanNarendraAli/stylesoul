@@ -8,13 +8,11 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types tests/phase1-backend.test.ts && node --experimental-strip-types tests/phase2-colour-detection.test.ts && vitest run",
-    "calibrate:import:hf-flickr": "node --experimental-strip-types calibration/scripts/import-hf-flickr.ts",
-    "calibrate:predict": "node --experimental-strip-types calibration/scripts/predict.ts",
-    "calibrate": "node --experimental-strip-types calibration/scripts/report.ts",
+    "test": "vitest run",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "node --env-file-if-exists=.env.local --experimental-strip-types prisma/seed.ts"
+    "prisma:seed": "node --env-file-if-exists=.env.local --experimental-strip-types prisma/seed.ts",
+    "catalogue:check": "node --env-file-if-exists=.env.local --experimental-strip-types prisma/check-catalogue.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.0",

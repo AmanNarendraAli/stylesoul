@@ -5,15 +5,14 @@ import type { EyeColour, HairColour, SkinTone, Undertone } from "./map.ts";
  *
  * The `hex` values are the single source of truth shared by two consumers:
  *  - the manual colouring form (rendered as selectable swatches), and
- *  - the photo-detection matcher, which converts each hex to CIE Lab and
- *    matches a detected colour to the nearest preset by ΔE.
- *
- * Keep this browser-free so it stays importable from React Native.
+ *  - deriveDimensions in map.ts, which uses each swatch's CIE L* lightness.
  */
 export type ColourOption<T extends string> = {
   value: T;
   label: string;
   hex: string;
+  /** Short hint shown under the swatch. */
+  cue?: string;
 };
 
 export const skinOptions: ColourOption<SkinTone>[] = [
@@ -37,10 +36,30 @@ export const eyeOptions: ColourOption<EyeColour>[] = [
 ];
 
 export const undertoneOptions: ColourOption<Undertone>[] = [
-  { value: "cool", label: "Cool", hex: "#E7B7BE" },
-  { value: "neutral", label: "Neutral", hex: "#D2B49C" },
-  { value: "warm", label: "Warm", hex: "#D39A5B" },
-  { value: "olive", label: "Olive", hex: "#9F8F57" },
+  {
+    value: "cool",
+    label: "Cool",
+    hex: "#E7B7BE",
+    cue: "Veins look blue or purple. Silver suits you.",
+  },
+  {
+    value: "neutral",
+    label: "Neutral",
+    hex: "#D2B49C",
+    cue: "Veins are hard to read. Both metals suit you.",
+  },
+  {
+    value: "warm",
+    label: "Warm",
+    hex: "#D39A5B",
+    cue: "Veins look green. Gold suits you.",
+  },
+  {
+    value: "olive",
+    label: "Olive",
+    hex: "#9F8F57",
+    cue: "Skin has a greenish or grey-beige cast.",
+  },
 ];
 
 export const hairOptions: ColourOption<HairColour>[] = [

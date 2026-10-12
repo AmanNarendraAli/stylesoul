@@ -3,10 +3,16 @@
 import { motion } from "framer-motion";
 import type { BodyShape } from "@/lib/body-shape/classify";
 import type { ColourSeason } from "@/lib/colour-season/map";
-import { SEASON_PALETTES, SHAPE_PROPORTIONS } from "./palettes";
+import { SEASON_LABELS, SHAPE_LABELS } from "@/lib/labels";
+import {
+  NEUTRAL_PROPORTIONS,
+  SEASON_PALETTES,
+  SHAPE_PROPORTIONS,
+} from "./palettes";
 
 export type AvatarProps = {
-  shape: BodyShape;
+  /** Null renders a neutral silhouette. */
+  shape: BodyShape | null;
   season: ColourSeason;
   size?: number;
   pulse?: boolean;
@@ -20,7 +26,8 @@ const HIPS_Y = 214;
 const HEM_Y = 286;
 
 export function Avatar({ shape, season, size = 220, pulse = true }: AvatarProps) {
-  const proportions = SHAPE_PROPORTIONS[shape];
+  const proportions = shape ? SHAPE_PROPORTIONS[shape] : NEUTRAL_PROPORTIONS;
+  const shapeKey = shape ?? "neutral";
   const palette = SEASON_PALETTES[season];
 
   const half = (width: number) => width / 2;
@@ -51,11 +58,11 @@ export function Avatar({ shape, season, size = 220, pulse = true }: AvatarProps)
       width={size}
       height={size * (320 / 200)}
       role="img"
-      aria-label={`Stylised silhouette: ${shape}, ${season}`}
+      aria-label={`Silhouette in ${SEASON_LABELS[season]} colours${shape ? `, ${SHAPE_LABELS[shape]} shape` : ""}`}
       className="block"
     >
       <defs>
-        <radialGradient id={`pulse-${shape}-${season}`} cx="50%" cy="50%" r="50%">
+        <radialGradient id={`pulse-${shapeKey}-${season}`} cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor={palette.pulse} stopOpacity="0.45" />
           <stop offset="100%" stopColor={palette.pulse} stopOpacity="0" />
         </radialGradient>
@@ -66,7 +73,7 @@ export function Avatar({ shape, season, size = 220, pulse = true }: AvatarProps)
           cx={CENTRE_X}
           cy={170}
           r={120}
-          fill={`url(#pulse-${shape}-${season})`}
+          fill={`url(#pulse-${shapeKey}-${season})`}
           initial={{ opacity: 0.4, scale: 0.92 }}
           animate={{ opacity: [0.4, 0.8, 0.4], scale: [0.92, 1.04, 0.92] }}
           transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}

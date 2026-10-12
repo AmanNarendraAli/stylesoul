@@ -9,8 +9,8 @@
 export type QualityMetrics = {
   /** Number of faces the landmarker detected. */
   faceCount: number;
-  /** Mean L* (0–100) over the sampled skin region. */
-  meanLightness: number;
+  /** Median L* (0–100) of the sampled skin. */
+  skinLightness: number;
   /** Face bounding-box area as a fraction (0–1) of the whole image. */
   faceAreaFraction: number;
 };
@@ -27,8 +27,9 @@ export type QualityReason =
   | "face_too_small"
   | "low_confidence";
 
-// Thresholds are placeholders pending calibration (see /calibration).
-const MIN_LIGHTNESS = 25; // below this, shadows dominate the skin sample
+// Labelled deep skin in ordinary light sits at L* 30–50, so the dark cut-off
+// must stay well below that (see calibration/README.md).
+const MIN_LIGHTNESS = 15; // below this, shadows dominate the skin sample
 const MAX_LIGHTNESS = 95; // above this, the region is blown out / overexposed
 const MIN_FACE_AREA = 0.04; // face smaller than ~4% of frame → too few pixels
 
@@ -54,14 +55,14 @@ export function assessQuality(metrics: QualityMetrics): QualityResult {
       message: "Move a little closer so your face fills more of the frame.",
     };
   }
-  if (metrics.meanLightness < MIN_LIGHTNESS) {
+  if (metrics.skinLightness < MIN_LIGHTNESS) {
     return {
       ok: false,
       reason: "too_dark",
       message: "The photo is too dark. Find softer, even daylight.",
     };
   }
-  if (metrics.meanLightness > MAX_LIGHTNESS) {
+  if (metrics.skinLightness > MAX_LIGHTNESS) {
     return {
       ok: false,
       reason: "too_bright",

@@ -31,7 +31,7 @@ const httpsUrl = z
 const uniqueValues = <T extends z.ZodTypeAny>(item: T) =>
   z
     .array(item)
-    .min(1)
+    .min(1, "Choose at least one")
     .refine((values) => new Set(values).size === values.length, {
       message: "Values must be unique",
     });

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUserState } from "@/lib/server/auth";
+import { requireUser } from "@/lib/server/require-user";
 import { AccountDeletedError } from "@/lib/server/account-lifecycle";
 import {
   getOrCreateWeeklyEditForUser,
@@ -8,19 +8,11 @@ import {
 } from "@/lib/server/weekly-edit";
 
 export async function GET() {
-  const auth = await getAuthenticatedUserState();
-  if (!auth.available) {
-    return NextResponse.json(
-      { message: "Authentication unavailable" },
-      { status: 503 },
-    );
-  }
-  if (!auth.user) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
 
   try {
-    const weeklyEdit = await getOrCreateWeeklyEditForUser(auth.user.id);
+    const weeklyEdit = await getOrCreateWeeklyEditForUser(user.id);
     return NextResponse.json({
       weeklyEdit: {
         id: weeklyEdit.id,

@@ -1,11 +1,13 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/avatar/Avatar";
-import { classifyBodyShape } from "@/lib/body-shape/classify";
-import { mapColourSeason } from "@/lib/colour-season/map";
+import { OnboardingProgress } from "@/components/onboarding/OnboardingProgress";
+import { classifyBodyShape, type BodyShape } from "@/lib/body-shape/classify";
+import { mapColourSeason, type ColourSeason } from "@/lib/colour-season/map";
+import { SEASON_LABELS } from "@/lib/labels";
 import { useOnboarding } from "../OnboardingProvider";
 
 type StepStatus = "pending" | "active" | "done";
@@ -16,12 +18,12 @@ type StepLabel = {
 };
 
 const STEPS: StepLabel[] = [
-  { key: "body", label: "Calculating body proportions" },
-  { key: "season", label: "Mapping colour season" },
-  { key: "avatar", label: "Generating avatar" },
-  { key: "edit", label: "Curating silhouettes" },
-  { key: "profile", label: "Building your style profile" },
+  { key: "season", label: "Finding your colour season" },
+  { key: "shape", label: "Working out your shape" },
+  { key: "pieces", label: "Picking this week's three pieces" },
 ];
+
+const SAVE_ERROR = "We couldn't save your profile. Please try again.";
 
 const MIN_STEP_DURATION_MS = 800;
 
@@ -29,13 +31,9 @@ function minDelay(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
-async function run<T>(work: Promise<T> | (() => Promise<T>) | (() => T)) {
-  const workPromise =
-    typeof work === "function"
-      ? Promise.resolve().then(work as () => T | Promise<T>)
-      : work;
+async function run<T>(work: () => T | Promise<T>) {
   const [value] = await Promise.all([
-    workPromise,
+    Promise.resolve().then(work),
     minDelay(MIN_STEP_DURATION_MS),
   ]);
   return value;
@@ -43,107 +41,89 @@ async function run<T>(work: Promise<T> | (() => Promise<T>) | (() => T)) {
 
 export default function OnboardingAnalysingPage() {
   const router = useRouter();
+  const isEdit = useSearchParams().get("edit") === "1";
   const { draft, isHydrated, reset } = useOnboarding();
+  const [steps, setSteps] = useState(STEPS);
   const [currentStep, setCurrentStep] = useState(0);
+  const [season, setSeason] = useState<ColourSeason | null>(null);
+  const [shape, setShape] = useState<BodyShape | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const hasStartedRef = useRef(false);
-  const profileSavedRef = useRef(false);
 
   useEffect(() => {
     if (hasStartedRef.current) return;
     if (!isHydrated) return;
-    const { body, colouring, dimensions } = draft;
-    if (!body) {
-      router.replace("/onboarding/body");
-      return;
-    }
-    // Colouring and the four drape comparisons travel together; a draft
-    // missing either (e.g. from an older key) must redo the colouring step
-    // rather than have dimensions fabricated for it.
-    if (!colouring || !dimensions) {
+    const { body, colouring } = draft;
+    if (!colouring) {
       router.replace("/onboarding/colouring");
       return;
     }
     hasStartedRef.current = true;
+    // Measurements are optional; without them there is no shape to work out.
+    const activeSteps = body
+      ? STEPS
+      : STEPS.filter((step) => step.key !== "shape");
+    const stepIndex = (key: string) =>
+      activeSteps.findIndex((step) => step.key === key);
 
     (async () => {
-      try {
-        setCurrentStep(0);
-        await run(() => classifyBodyShape(body));
+      setSteps(activeSteps);
+      setCurrentStep(stepIndex("season"));
+      setSeason(await run(() => mapColourSeason(colouring)));
 
-        setCurrentStep(1);
-        await run(() => mapColourSeason(colouring, dimensions));
-
-        setCurrentStep(2);
-        await run(() => import("@/components/avatar/Avatar"));
-
-        setCurrentStep(3);
-        await run(async () => {
-          if (!profileSavedRef.current) {
-            const profileResponse = await fetch("/api/profile", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                ...body,
-                ...colouring,
-                ...dimensions,
-                detectionSource: draft.colouringSource ?? "manual",
-              }),
-            });
-            if (!profileResponse.ok) {
-              const payload = await profileResponse.json().catch(() => ({}));
-              throw new Error(payload?.message ?? "Failed to save profile");
-            }
-            profileSavedRef.current = true;
-          }
-
-          const editResponse = await fetch("/api/recs/weekly");
-          if (!editResponse.ok) {
-            const payload = await editResponse.json().catch(() => ({}));
-            throw new Error(payload?.message ?? "Failed to curate weekly edit");
-          }
-        });
-
-        setCurrentStep(4);
-        await run(async () => {
-          const response = await fetch("/api/profile");
-          if (!response.ok) {
-            throw new Error("Failed to confirm style profile");
-          }
-        });
-
-        setCurrentStep(STEPS.length);
-        reset();
-        router.replace("/profile");
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Something went wrong building your profile",
-        );
+      if (body) {
+        setCurrentStep(stepIndex("shape"));
+        setShape(await run(() => classifyBodyShape(body)));
       }
+
+      setCurrentStep(stepIndex("pieces"));
+      const saved = await run(async () => {
+        const profileResponse = await fetch("/api/profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...body,
+            ...colouring,
+            detectionSource: draft.colouringSource ?? "manual",
+          }),
+        }).catch(() => null);
+        if (!profileResponse?.ok) return false;
+        // The products page copes with a missing edit, so a failure here
+        // still lets the user continue to their profile.
+        await fetch("/api/recs/weekly").catch(() => null);
+        return true;
+      });
+      if (!saved) {
+        setError(SAVE_ERROR);
+        return;
+      }
+
+      setCurrentStep(activeSteps.length);
+      reset();
+      router.replace("/profile");
     })();
   }, [attempt, draft, isHydrated, router, reset]);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-charcoal px-6 text-cream">
       <section className="w-full max-w-2xl text-center">
-        <p className="text-sm uppercase tracking-[0.24em] text-gold">Step 3 of 3</p>
-        <h1 className="mt-3 font-display text-5xl">Building your style profile</h1>
-        <p className="mt-4 text-cream/70">Hold on — this takes a moment.</p>
+        {isEdit ? null : <OnboardingProgress current={2} />}
+        <h1 className="mt-8 font-display text-5xl">
+          {isEdit ? "Updating your profile" : "Building your style profile"}
+        </h1>
+        <p className="mt-4 text-cream/70">This takes a few seconds.</p>
 
-        <div className="mt-12 flex justify-center">
-          <motion.div
-            className="rounded-full"
-            initial={{ scale: 0.96, opacity: 0.6 }}
-            animate={{ scale: [0.96, 1.02, 0.96], opacity: [0.6, 1, 0.6] }}
-            transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
-          >
-            <div className="h-32 w-32 rounded-full border border-gold/30 bg-gold/10" />
-          </motion.div>
+        {/* Fixed height so the page doesn't jump when the avatar appears. */}
+        <div className="mt-10 flex h-64 justify-center">
+          {season ? <Avatar shape={shape} season={season} size={160} /> : null}
         </div>
+        <p aria-live="polite" className="mt-4 min-h-8 font-display text-2xl text-gold">
+          {season ? SEASON_LABELS[season] : null}
+        </p>
 
-        <ol className="mx-auto mt-12 max-w-md space-y-3 text-left">
-          {STEPS.map((step, index) => {
+        <ol className="mx-auto mt-8 max-w-md space-y-3 text-left">
+          {steps.map((step, index) => {
             const status: StepStatus =
               index < currentStep ? "done" : index === currentStep ? "active" : "pending";
             return (
@@ -194,7 +174,7 @@ export default function OnboardingAnalysingPage() {
               </button>
               <button
                 type="button"
-                onClick={() => router.push("/onboarding/body")}
+                onClick={() => router.push("/onboarding/colouring")}
                 className="min-h-11 min-w-11 rounded text-cream/75 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
               >
                 Start over
@@ -202,12 +182,6 @@ export default function OnboardingAnalysingPage() {
             </div>
           </div>
         ) : null}
-
-        {/* Preload the avatar component visually offscreen so it is ready when
-            the profile page renders. */}
-        <div aria-hidden className="pointer-events-none invisible h-0 overflow-hidden">
-          <Avatar shape="hourglass" season="warm_spring" size={80} pulse={false} />
-        </div>
       </section>
     </main>
   );

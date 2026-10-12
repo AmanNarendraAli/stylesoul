@@ -1,3 +1,3 @@
-// v4: drafts additionally carry the four confirmed drape dimensions; older
-// keys are intentionally abandoned so stale drafts can never fabricate them.
-export const ONBOARDING_DRAFT_STORAGE_KEY = "stylesoul.onboardingDraft.v4";
+// v5: season dimensions are derived from the colouring, not stored in drafts;
+// older keys are abandoned so stale drafts are never reused.
+export const ONBOARDING_DRAFT_STORAGE_KEY = "stylesoul.onboardingDraft.v5";

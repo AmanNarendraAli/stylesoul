@@ -17,6 +17,15 @@ export const SHAPE_PROPORTIONS: Record<BodyShape, ShapeProportions> = {
   inverted_triangle: { shoulders: 80, bust: 72, waist: 54, hips: 62, hem: 76 },
 };
 
+/** Used when no measurements were given, so no silhouette is implied. */
+export const NEUTRAL_PROPORTIONS: ShapeProportions = {
+  shoulders: 68,
+  bust: 68,
+  waist: 56,
+  hips: 70,
+  hem: 84,
+};
+
 export type SeasonPalette = {
   skin: string;
   top: string;
@@ -110,27 +119,4 @@ export const SEASON_PALETTES: Record<ColourSeason, SeasonPalette> = {
     accent: "#C42B4C",
     pulse: "#C42B4C",
   },
-};
-
-export const SHAPE_LABELS: Record<BodyShape, string> = {
-  hourglass: "Hourglass",
-  triangle: "Triangle",
-  full_midsection: "Full midsection",
-  rectangle: "Rectangle",
-  inverted_triangle: "Inverted triangle",
-};
-
-export const SEASON_LABELS: Record<ColourSeason, string> = {
-  light_spring: "Light spring",
-  warm_spring: "Warm spring",
-  bright_spring: "Bright spring",
-  light_summer: "Light summer",
-  cool_summer: "Cool summer",
-  soft_summer: "Soft summer",
-  soft_autumn: "Soft autumn",
-  warm_autumn: "Warm autumn",
-  deep_autumn: "Deep autumn",
-  deep_winter: "Deep winter",
-  cool_winter: "Cool winter",
-  bright_winter: "Bright winter",
 };

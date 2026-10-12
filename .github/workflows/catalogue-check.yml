@@ -1,0 +1,33 @@
+name: Catalogue check
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+    steps:
+      - id: secrets
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::notice::DATABASE_URL secret is not set; skipping the catalogue check."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.secrets.outputs.skip != 'true'
+        uses: actions/checkout@v4
+      - if: steps.secrets.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.secrets.outputs.skip != 'true'
+        run: npm ci
+      - if: steps.secrets.outputs.skip != 'true'
+        run: npm run prisma:generate
+      - if: steps.secrets.outputs.skip != 'true'
+        run: npm run catalogue:check -- --apply

@@ -6,22 +6,13 @@ import {
   findStyleProfile,
   saveStyleProfile,
 } from "@/lib/server/profile";
-import { getAuthenticatedUserState } from "@/lib/server/auth";
+import { requireUser } from "@/lib/server/require-user";
 import { AccountDeletedError } from "@/lib/server/account-lifecycle";
 import { recordFunnelEvent } from "@/lib/server/funnel";
 
 export async function GET() {
-  const auth = await getAuthenticatedUserState();
-  if (!auth.available) {
-    return NextResponse.json(
-      { message: "Authentication unavailable" },
-      { status: 503 },
-    );
-  }
-  const { user } = auth;
-  if (!user) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
 
   const profile = await findStyleProfile(user.id);
 
@@ -33,17 +24,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await getAuthenticatedUserState();
-  if (!auth.available) {
-    return NextResponse.json(
-      { message: "Authentication unavailable" },
-      { status: 503 },
-    );
-  }
-  const { user } = auth;
-  if (!user) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
 
   if (!user.email) {
     return NextResponse.json(

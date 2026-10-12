@@ -1,17 +1,20 @@
 import Link from "next/link";
+import { safeNextPath } from "@/lib/auth-redirect";
 import { signInWithGoogle } from "./actions";
 
 type SignInPageProps = {
   searchParams: Promise<{
     error?: string;
+    next?: string;
   }>;
 };
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
   const params = await searchParams;
+  const next = safeNextPath(params.next);
   const errorMessage =
     params.error === "oauth"
-      ? "Google sign-in could not be completed. Try again."
+      ? "We couldn't sign you in with Google. Please try again."
       : "Something went wrong. Try again in a moment.";
 
   return (
@@ -22,10 +25,11 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
         </p>
         <h1 className="mt-4 font-display text-5xl">Sign in</h1>
         <p className="mt-4 text-cream/75">
-          Continue securely with your Google account.
+          Use your Google account to sign in or create your profile.
         </p>
 
         <form action={signInWithGoogle} className="mt-8">
+          {next ? <input type="hidden" name="next" value={next} /> : null}
           <button
             type="submit"
             className="min-h-11 w-full rounded bg-gold px-5 py-3 text-sm font-semibold text-charcoal transition hover:bg-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"

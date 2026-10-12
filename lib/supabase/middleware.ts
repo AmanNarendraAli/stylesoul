@@ -1,7 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { PATHNAME_HEADER } from "@/lib/auth-redirect";
 
 export async function updateSession(request: NextRequest) {
+  // Lets server layouts send signed-out users back here after sign-in.
+  // Always overwritten, so a client cannot supply its own value.
+  request.headers.set(PATHNAME_HEADER, request.nextUrl.pathname);
+
   let response = NextResponse.next({
     request,
   });

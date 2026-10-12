@@ -1,7 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Camera } from "lucide-react";
 import type { DetectedColouring } from "@/lib/colour-detection/detect";
+import { CameraCapture } from "./CameraCapture";
 import { detectFromPhoto } from "./colour-detection-client";
 
 type Status =
@@ -9,32 +11,49 @@ type Status =
   | { kind: "detecting" }
   | { kind: "error"; message: string };
 
+const subscribeNever = () => () => {};
+
 /**
- * Optional photo step that pre-fills the manual colouring screen. The manual
- * selectors remain the canonical input — this is positioned as a time-saver,
- * and any failure quietly routes the user back to choosing by hand.
+ * Optional camera step that pre-fills the manual colouring screen. The manual
+ * swatches remain the canonical input — the photo is a time-saver, and any
+ * failure routes the user back to choosing by hand.
  */
 export function PhotoColourCapture({
   onDetected,
   onPhotoSelected,
+  onPickManually,
 }: {
   onDetected: (detected: DetectedColouring) => void;
   /**
-   * Fired with the chosen file before analysis so the parent can show a
+   * Fired with the captured file before analysis so the parent can show a
    * transient, local-only preview. The file itself is never persisted here.
    */
   onPhotoSelected?: (file: File) => void;
+  /** Moves the user to the manual swatches. */
+  onPickManually: () => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
-  const [consented, setConsented] = useState(false);
-  const consentedRef = useRef(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const pickAfterCloseRef = useRef(false);
+  // Client-only check; null during the server render so nothing flashes.
+  const canUseCamera = useSyncExternalStore<boolean | null>(
+    subscribeNever,
+    () => Boolean(navigator.mediaDevices?.getUserMedia),
+    () => null,
+  );
 
-  const handleFile = async (file: File | undefined) => {
-    if (!file) return;
+  // Runs after the closed camera restores focus, so this focus move wins.
+  useEffect(() => {
+    if (!cameraOpen && pickAfterCloseRef.current) {
+      pickAfterCloseRef.current = false;
+      onPickManually();
+    }
+  }, [cameraOpen, onPickManually]);
+
+  const handlePhoto = async (file: File) => {
     onPhotoSelected?.(file);
     setStatus({ kind: "detecting" });
-    const outcome = await detectFromPhoto(file, () => consentedRef.current);
+    const outcome = await detectFromPhoto(file);
     if (outcome.ok) {
       setStatus({ kind: "idle" });
       onDetected(outcome.detected);
@@ -43,75 +62,65 @@ export function PhotoColourCapture({
     }
   };
 
+  if (canUseCamera === null) return null;
+
+  if (!canUseCamera) {
+    return (
+      <p className="text-sm text-cream/70">
+        Photo suggestions need a camera, so pick your colours below.
+      </p>
+    );
+  }
+
   return (
-    <div className="rounded-lg border border-cream/15 bg-cream/[0.03] p-5">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="font-display text-xl">
-            Try experimental photo suggestions
-          </p>
-          <p className="mt-1 max-w-md text-sm text-cream/70">
-            Photo matching is not yet calibrated on self-identified samples.
-            We&apos;ll suggest swatches from a clear, front-facing daylight
-            photo; review and change every suggestion below.
-          </p>
-          <label className="mt-3 flex max-w-md items-start gap-2 text-xs text-cream/70">
-            <input
-              type="checkbox"
-              checked={consented}
-              onChange={(event) => {
-                consentedRef.current = event.target.checked;
-                setConsented(event.target.checked);
-              }}
-              className="mt-0.5 accent-gold"
-            />
-            <span>
-              Allow server fallback if on-device analysis is unavailable. A
-              downscaled pixel buffer will be processed on StyleSoul&apos;s
-              server and immediately discarded.
-            </span>
-          </label>
-        </div>
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={status.kind === "detecting"}
-          className="min-h-11 rounded-full border border-gold/40 px-5 py-2 text-sm text-gold transition hover:bg-gold/10 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-        >
-          {status.kind === "detecting" ? "Analysing…" : "Detect from a photo"}
-        </button>
-      </div>
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        aria-label="Choose a photo for colour suggestions"
-        tabIndex={-1}
-        className="sr-only"
-        onChange={(e) => {
-          void handleFile(e.target.files?.[0]);
-          // Reset so re-selecting the same file fires onChange again.
-          e.target.value = "";
-        }}
-      />
-
-      <p className="mt-3 text-xs text-cream/60">
-        Your photo is analysed on your device. If you enable server fallback, a
-        downscaled pixel buffer may be processed on our server and is never stored.
+    <div className="flex flex-col items-center rounded-lg border border-cream/15 bg-cream/[0.03] px-5 py-8 text-center">
+      <button
+        type="button"
+        onClick={() => setCameraOpen(true)}
+        disabled={status.kind === "detecting"}
+        className="group flex flex-col items-center gap-3 rounded-lg p-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+      >
+        <span className="flex h-24 w-24 items-center justify-center rounded-full bg-gold text-charcoal transition group-hover:bg-gold/90">
+          <Camera aria-hidden="true" className="h-10 w-10" />
+        </span>
+        <span className="font-display text-xl">Take a photo</span>
+      </button>
+      <p className="mt-1 text-sm text-cream/70">
+        We&apos;ll guide you to good light. Your photo never leaves this device.
       </p>
 
       {status.kind === "detecting" ? (
         <p className="mt-3 text-xs text-cream/70" role="status">
-          First-time analysis downloads its face-landmark files and can take
-          longer. You can keep choosing swatches below.
+          Analysing your photo…
         </p>
       ) : null}
 
       {status.kind === "error" ? (
         <p className="mt-3 text-xs text-blush" role="alert">
-          {status.message} You can still choose your swatches below.
+          {status.message} You can pick your colours below.
         </p>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={onPickManually}
+        className="mt-4 min-h-11 px-3 text-sm text-gold underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+      >
+        Pick your colours yourself
+      </button>
+
+      {cameraOpen ? (
+        <CameraCapture
+          onCapture={(file) => {
+            setCameraOpen(false);
+            void handlePhoto(file);
+          }}
+          onClose={() => setCameraOpen(false)}
+          onPickManually={() => {
+            pickAfterCloseRef.current = true;
+            setCameraOpen(false);
+          }}
+        />
       ) : null}
     </div>
   );
