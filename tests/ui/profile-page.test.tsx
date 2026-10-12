@@ -26,6 +26,9 @@ vi.mock("next/link", () => ({
   ),
 }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: () => ({ value: "cm" }) }),
+}));
 vi.mock("@/components/avatar/Avatar", () => ({ Avatar: () => null }));
 vi.mock("@/lib/server/profile", () => ({
   findStyleProfile: mocks.findStyleProfile,

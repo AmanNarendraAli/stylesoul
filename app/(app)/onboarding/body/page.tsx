@@ -2,21 +2,30 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useForm, type SubmitHandler } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import type { z } from "zod";
+import { useForm, type FieldErrors, type Resolver } from "react-hook-form";
 import {
   bodyMeasurementsSchema,
+  MEASUREMENT_LIMITS,
   type BodyMeasurements,
 } from "@/lib/body-shape/classify";
+import {
+  cmToFeetInches,
+  cmToInches,
+  feetInchesToCm,
+  inchesToCm,
+  parseUnit,
+  UNIT_COOKIE,
+  type LengthUnit,
+} from "@/lib/units";
 import { NEUTRAL_PROPORTIONS } from "@/components/avatar/palettes";
 import { OnboardingProgress } from "@/components/onboarding/OnboardingProgress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useOnboarding } from "../OnboardingProvider";
 
-type BodyFormInput = z.input<typeof bodyMeasurementsSchema>;
 type FieldName = keyof BodyMeasurements;
+/** What the user types, in their chosen unit. Height in inches is feet + inches. */
+type FormValues = Record<FieldName | "heightFt" | "heightIn", string>;
 
 type FieldConfig = {
   name: FieldName;
@@ -26,38 +35,143 @@ type FieldConfig = {
 };
 
 const FIELDS: FieldConfig[] = [
-  { name: "bustCm", label: "Bust (cm)", hint: "Measure around the fullest part.", required: true },
-  { name: "waistCm", label: "Waist (cm)", hint: "Measure around the narrowest part.", required: true },
-  { name: "hipsCm", label: "Hips (cm)", hint: "Measure around the fullest part.", required: true },
+  { name: "bustCm", label: "Bust", hint: "Measure around the fullest part.", required: true },
+  { name: "waistCm", label: "Waist", hint: "Measure around the narrowest part.", required: true },
+  { name: "hipsCm", label: "Hips", hint: "Measure around the fullest part.", required: true },
   {
     name: "shouldersCm",
-    label: "Shoulder width (cm)",
+    label: "Shoulder width",
     hint: "Measure straight across from one shoulder point to the other.",
     required: false,
   },
-  { name: "heightCm", label: "Height (cm)", hint: "Stand straight without shoes.", required: false },
+  { name: "heightCm", label: "Height", hint: "Stand straight without shoes.", required: false },
 ];
+
+const GIRTHS = ["bustCm", "waistCm", "hipsCm", "shouldersCm"] as const;
+const EMPTY: FormValues = {
+  bustCm: "",
+  waistCm: "",
+  hipsCm: "",
+  shouldersCm: "",
+  heightCm: "",
+  heightFt: "",
+  heightIn: "",
+};
+
+/** Stored centimetres → what the form shows in `unit`. */
+function toForm(body: Partial<BodyMeasurements> | undefined, unit: LengthUnit): FormValues {
+  const values = { ...EMPTY };
+  if (!body) return values;
+  for (const name of GIRTHS) {
+    const cm = body[name];
+    if (cm != null) values[name] = String(unit === "cm" ? cm : cmToInches(cm));
+  }
+  if (body.heightCm != null) {
+    if (unit === "cm") values.heightCm = String(body.heightCm);
+    else {
+      const { feet, inches } = cmToFeetInches(body.heightCm);
+      values.heightFt = String(feet);
+      values.heightIn = String(inches);
+    }
+  }
+  return values;
+}
+
+const num = (value: string) => (value.trim() === "" ? undefined : Number(value));
+
+/** What the form shows → centimetres (unparseable text passes through to fail validation). */
+function toCm(values: FormValues, unit: LengthUnit): Record<FieldName, unknown> {
+  const convert = (value: string) => {
+    const n = num(value);
+    if (n === undefined || Number.isNaN(n) || unit === "cm") return n ?? "";
+    return inchesToCm(n);
+  };
+  const feet = num(values.heightFt);
+  const inches = num(values.heightIn);
+  const height =
+    unit === "cm"
+      ? convert(values.heightCm)
+      : feet === undefined && inches === undefined
+        ? ""
+        : feetInchesToCm(feet ?? 0, inches ?? 0);
+  return {
+    bustCm: convert(values.bustCm),
+    waistCm: convert(values.waistCm),
+    hipsCm: convert(values.hipsCm),
+    shouldersCm: convert(values.shouldersCm),
+    heightCm: height,
+  };
+}
+
+function rangeMessage(name: FieldName, unit: LengthUnit) {
+  const { label, min, max } = MEASUREMENT_LIMITS[name];
+  if (unit === "cm") return `Enter a ${label} between ${min} and ${max} cm`;
+  if (name === "heightCm") {
+    const low = cmToFeetInches(min);
+    const high = cmToFeetInches(max);
+    return `Enter a ${label} between ${low.feet} ft ${low.inches} in and ${high.feet} ft ${high.inches} in`;
+  }
+  return `Enter a ${label} between ${cmToInches(min)} and ${cmToInches(max)} in`;
+}
+
+function resolverFor(unit: LengthUnit): Resolver<FormValues, unknown, BodyMeasurements> {
+  return async (values) => {
+    const parsed = bodyMeasurementsSchema.safeParse(toCm(values, unit));
+    if (parsed.success) return { values: parsed.data, errors: {} };
+    const errors: FieldErrors<FormValues> = {};
+    for (const issue of parsed.error.issues) {
+      const name = issue.path[0] as FieldName;
+      errors[name] = { type: "validate", message: rangeMessage(name, unit) };
+    }
+    return { values: {}, errors };
+  };
+}
+
+function readUnitCookie(): LengthUnit {
+  const match = document.cookie.match(new RegExp(`(?:^|; )${UNIT_COOKIE}=([^;]*)`));
+  return parseUnit(match?.[1]);
+}
 
 export default function OnboardingBodyPage() {
   const router = useRouter();
   const isEdit = useSearchParams().get("edit") === "1";
   const { draft, isHydrated, setBody } = useOnboarding();
   const [activeField, setActiveField] = useState<FieldName | null>(null);
+  const [unit, setUnit] = useState<LengthUnit>("in");
   const {
     register,
     handleSubmit,
     reset,
+    getValues,
     formState: { errors, isSubmitting },
-  } = useForm<BodyFormInput, unknown, BodyMeasurements>({
-    resolver: zodResolver(bodyMeasurementsSchema),
-    defaultValues: draft.body,
+  } = useForm<FormValues, unknown, BodyMeasurements>({
+    resolver: resolverFor(unit),
+    defaultValues: EMPTY,
   });
+
+  // The saved unit is only readable in the browser.
+  useEffect(() => setUnit(readUnitCookie()), []);
 
   useEffect(() => {
     if (isHydrated && draft.body) {
-      reset(draft.body);
+      reset(toForm(draft.body, unit));
     }
+    // Re-run only when the draft arrives; unit switches convert in changeUnit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft.body, isHydrated, reset]);
+
+  const changeUnit = (next: LengthUnit) => {
+    if (next === unit) return;
+    // Carry over each value that converts, even if the form isn't valid yet.
+    const typed = Object.fromEntries(
+      Object.entries(toCm(getValues(), unit)).filter(
+        ([, cm]) => typeof cm === "number" && Number.isFinite(cm) && cm > 0,
+      ),
+    ) as Partial<BodyMeasurements>;
+    reset(toForm(typed, next));
+    document.cookie = `${UNIT_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
+    setUnit(next);
+  };
 
   useEffect(() => {
     if (isHydrated && !draft.colouring) {
@@ -69,7 +183,7 @@ export default function OnboardingBodyPage() {
     ? "/onboarding/analysing?edit=1"
     : "/onboarding/analysing";
 
-  const onSubmit: SubmitHandler<BodyMeasurements> = (data) => {
+  const onSubmit = (data: BodyMeasurements) => {
     setBody(data);
     router.push(analysingPath);
   };
@@ -83,9 +197,10 @@ export default function OnboardingBodyPage() {
     <main className="min-h-screen bg-charcoal px-6 py-16 text-cream">
       <section className="mx-auto max-w-3xl">
         {isEdit ? null : <OnboardingProgress current={1} />}
-        <h1 className="mt-8 font-display text-5xl">
-          Your measurements (optional)
-        </h1>
+        <div className="mt-8 flex flex-wrap items-start justify-between gap-4">
+          <h1 className="font-display text-5xl">Your measurements (optional)</h1>
+          <UnitToggle unit={unit} onChange={changeUnit} />
+        </div>
 
         {isEdit ? null : (
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded border border-cream/15 p-4">
@@ -100,8 +215,9 @@ export default function OnboardingBodyPage() {
         )}
 
         <p className="mt-6 max-w-xl text-cream/75">
-          Use a soft tape measure and round to the nearest centimetre. We use
-          your bust, waist and hips to work out your shape.
+          Use a soft tape measure and round to the nearest{" "}
+          {unit === "cm" ? "centimetre" : "half inch"}. We use your bust, waist
+          and hips to work out your shape.
         </p>
 
         <form onSubmit={handleSubmit(onSubmit)} className="mt-10 space-y-6">
@@ -129,15 +245,33 @@ export default function OnboardingBodyPage() {
                     <span className="mt-1 block text-xs text-cream/55">
                       {field.hint}
                     </span>
-                    <Input
-                      type="number"
-                      inputMode="numeric"
-                      step={1}
-                      className="mt-2"
-                      aria-invalid={error ? "true" : "false"}
-                      aria-describedby={error ? `${field.name}-error` : undefined}
-                      {...register(field.name)}
-                    />
+                    {field.name === "heightCm" && unit === "in" ? (
+                      <span className="mt-2 grid grid-cols-2 gap-2">
+                        <UnitInput
+                          suffix="ft"
+                          step={1}
+                          label="Height, feet"
+                          error={error ? `${field.name}-error` : undefined}
+                          registration={register("heightFt")}
+                        />
+                        <UnitInput
+                          suffix="in"
+                          step={1}
+                          label="Height, inches"
+                          error={error ? `${field.name}-error` : undefined}
+                          registration={register("heightIn")}
+                        />
+                      </span>
+                    ) : (
+                      <span className="mt-2 block">
+                        <UnitInput
+                          suffix={unit}
+                          step={unit === "cm" ? 1 : 0.5}
+                          error={error ? `${field.name}-error` : undefined}
+                          registration={register(field.name)}
+                        />
+                      </span>
+                    )}
                     {error ? (
                       <span
                         id={`${field.name}-error`}
@@ -176,6 +310,67 @@ export default function OnboardingBodyPage() {
         </form>
       </section>
     </main>
+  );
+}
+
+function UnitToggle({
+  unit,
+  onChange,
+}: {
+  unit: LengthUnit;
+  onChange: (unit: LengthUnit) => void;
+}) {
+  return (
+    <div role="group" aria-label="Units" className="flex rounded-full border border-cream/20 p-1">
+      {(["cm", "in"] as const).map((option) => (
+        <button
+          key={option}
+          type="button"
+          aria-pressed={unit === option}
+          onClick={() => onChange(option)}
+          className={`min-h-9 min-w-12 rounded-full px-3 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold ${
+            unit === option ? "bg-gold font-semibold text-charcoal" : "text-cream/70 hover:text-cream"
+          }`}
+        >
+          {option}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function UnitInput({
+  suffix,
+  step,
+  label,
+  error,
+  registration,
+}: {
+  suffix: string;
+  step: number;
+  label?: string;
+  error: string | undefined;
+  registration: ReturnType<ReturnType<typeof useForm<FormValues>>["register"]>;
+}) {
+  return (
+    <span className="relative block">
+      <Input
+        type="number"
+        inputMode="decimal"
+        step={step}
+        aria-label={label}
+        aria-invalid={error ? "true" : "false"}
+        aria-describedby={error}
+        className="pr-10"
+        {...registration}
+      />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-cream/50"
+      >
+        {suffix}
+      </span>
+    </span>
   );
 }
 

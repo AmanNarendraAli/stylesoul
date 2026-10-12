@@ -69,6 +69,7 @@ export const hairOptions: ColourOption<HairColour>[] = [
   { value: "chestnut_brown", label: "Chestnut brown", hex: "#5A2E15" },
   { value: "auburn", label: "Auburn", hex: "#893A1F" },
   { value: "red", label: "Red", hex: "#B8442B" },
+  { value: "brown_black", label: "Brown-black", hex: "#2B1A12" },
   { value: "black", label: "Black", hex: "#1A0F0A" },
   { value: "grey", label: "Grey", hex: "#B3AFA8" },
 ];

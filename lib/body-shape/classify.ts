@@ -35,16 +35,29 @@ export const optionalMeasurement = (
   unit = "cm",
 ) => z.preprocess(emptyToUndefined, measurement(label, min, max, unit).optional());
 
+/** Allowed ranges in centimetres; the form also uses them for inch messages. */
+export const MEASUREMENT_LIMITS = {
+  heightCm: { label: "height", min: 120, max: 230 },
+  bustCm: { label: "bust measurement", min: 60, max: 180 },
+  waistCm: { label: "waist measurement", min: 45, max: 180 },
+  hipsCm: { label: "hip measurement", min: 60, max: 190 },
+  shouldersCm: { label: "shoulder width", min: 25, max: 70 },
+} as const;
+
+const limit = (key: keyof typeof MEASUREMENT_LIMITS) => {
+  const { label, min, max } = MEASUREMENT_LIMITS[key];
+  return [label, min, max] as const;
+};
+
 /** Bust, waist and hips drive the shape; height and shoulders are extras. */
 export const bodyMeasurementsSchema = z.object({
-  heightCm: optionalMeasurement("height", 120, 230),
-  bustCm: measurement("bust measurement", 60, 180),
-  waistCm: measurement("waist measurement", 45, 180),
-  hipsCm: measurement("hip measurement", 60, 190),
+  heightCm: optionalMeasurement(...limit("heightCm")),
+  bustCm: measurement(...limit("bustCm")),
+  waistCm: measurement(...limit("waistCm")),
+  hipsCm: measurement(...limit("hipsCm")),
   // Stored as `shouldersCm` for compatibility; this is shoulder-to-shoulder width.
-  shouldersCm: optionalMeasurement("shoulder width", 25, 70),
+  shouldersCm: optionalMeasurement(...limit("shouldersCm")),
 });
-
 export type BodyMeasurements = z.infer<typeof bodyMeasurementsSchema>;
 
 /**

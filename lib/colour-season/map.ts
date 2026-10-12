@@ -29,6 +29,7 @@ export const hairColours = [
   "chestnut_brown",
   "auburn",
   "red",
+  "brown_black",
   "black",
   "grey",
 ] as const;
@@ -102,6 +103,7 @@ const hairClarity: Record<HairColour, number> = {
   golden_blonde: 0.6,
   auburn: 0.6,
   black: 0.5,
+  brown_black: 0.45,
   chestnut_brown: 0.4,
   grey: 0.2,
   ash_brown: 0.1,
@@ -112,6 +114,7 @@ const hairWarmth: Record<HairColour, number> = {
   red: 1,
   auburn: 1,
   chestnut_brown: 1,
+  brown_black: 0.5,
   black: 0,
   platinum_blonde: -0.5,
   ash_brown: -0.5,

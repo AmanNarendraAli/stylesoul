@@ -298,7 +298,7 @@ function SwatchGroup<T extends string>({
       <input type="hidden" {...register} />
       <div
         className={`mt-5 grid gap-4 ${
-          hasCues ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-4 sm:grid-cols-8"
+          hasCues ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-[repeat(auto-fill,minmax(4.5rem,1fr))]"
         }`}
       >
         {options.map((option) => {

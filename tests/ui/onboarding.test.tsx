@@ -65,6 +65,8 @@ function renderOnboarding(page: ReactNode) {
 }
 
 beforeEach(() => {
+  // These tests enter centimetres; tests/ui/measurement-units.test.tsx covers inches.
+  document.cookie = "stylesoul_units=cm; path=/";
   vi.restoreAllMocks();
   sessionStorage.clear();
   router.push.mockReset();

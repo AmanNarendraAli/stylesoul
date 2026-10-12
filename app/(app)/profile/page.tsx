@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Avatar } from "@/components/avatar/Avatar";
 import { isBodyShape, type BodyShape } from "@/lib/body-shape/classify";
@@ -19,6 +20,7 @@ import {
   type ColourOption,
 } from "@/lib/colour-season/options";
 import { signInPath } from "@/lib/auth-redirect";
+import { formatLength, parseUnit, UNIT_COOKIE } from "@/lib/units";
 import { SEASON_LABELS, SHAPE_LABELS } from "@/lib/labels";
 import { findStyleProfile } from "@/lib/server/profile";
 import {
@@ -52,14 +54,15 @@ export default async function ProfilePage() {
     redirect("/onboarding");
   }
 
+  const unit = parseUnit((await cookies()).get(UNIT_COOKIE)?.value);
   const measurements: Array<[string, string]> = [
-    profile.heightCm ? ["Height", `${profile.heightCm} cm`] : null,
+    profile.heightCm ? ["Height", formatLength(profile.heightCm, unit, "height")] : null,
     profile.weightKg ? ["Weight", `${profile.weightKg} kg`] : null,
-    profile.bustCm ? ["Bust", `${profile.bustCm} cm`] : null,
-    profile.waistCm ? ["Waist", `${profile.waistCm} cm`] : null,
-    profile.hipsCm ? ["Hips", `${profile.hipsCm} cm`] : null,
+    profile.bustCm ? ["Bust", formatLength(profile.bustCm, unit)] : null,
+    profile.waistCm ? ["Waist", formatLength(profile.waistCm, unit)] : null,
+    profile.hipsCm ? ["Hips", formatLength(profile.hipsCm, unit)] : null,
     profile.shouldersCm
-      ? ["Shoulder width", `${profile.shouldersCm} cm`]
+      ? ["Shoulder width", formatLength(profile.shouldersCm, unit)]
       : null,
   ].filter(Boolean) as Array<[string, string]>;
   const skinHex = findOption(skinOptions, profile.skinTone)?.hex;
