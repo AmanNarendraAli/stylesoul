@@ -86,6 +86,8 @@ export default function OnboardingAnalysingPage() {
             ...body,
             ...colouring,
             detectionSource: draft.colouringSource ?? "manual",
+            faceLength: draft.face?.length,
+            faceLines: draft.face?.lines,
           }),
         }).catch(() => null);
         if (!profileResponse?.ok) return false;

@@ -3,12 +3,18 @@ import { bodyShapes } from "@/lib/body-shape/classify";
 import { colourSeasons } from "@/lib/colour-season/map";
 
 export const garmentCategories = [
+  "kurtas",
+  "kurta_sets",
+  "sarees",
   "tops",
   "knitwear",
   "dresses",
   "trousers",
   "skirts",
+  "co_ords",
   "outerwear",
+  "dupattas",
+  "jewellery",
   "shoes",
   "accessories",
 ] as const;
@@ -22,6 +28,28 @@ export const occasionTags = [
 ] as const;
 
 export const priceTiers = ["entry", "mid", "premium"] as const;
+export const necklines = [
+  "v",
+  "round",
+  "scoop",
+  "square",
+  "boat",
+  "sweetheart",
+  "collar",
+  "mandarin",
+  "high",
+  "cowl",
+  "off_shoulder",
+] as const;
+export const patterns = ["plain", "geometric", "floral"] as const;
+export const drapes = ["crisp", "fluid"] as const;
+export const metals = ["gold", "silver"] as const;
+
+export type GarmentCategory = (typeof garmentCategories)[number];
+export type Neckline = (typeof necklines)[number];
+export type Pattern = (typeof patterns)[number];
+export type Drape = (typeof drapes)[number];
+export type Metal = (typeof metals)[number];
 export const productStatuses = ["active", "inactive"] as const;
 
 const httpsUrl = z
@@ -43,18 +71,23 @@ const productFields = {
   imageUrl: httpsUrl,
   productUrl: httpsUrl,
   priceCents: z.coerce.number().int().positive().max(10_000_000),
-  currency: z.literal("GBP"),
+  currency: z.literal("INR"),
   status: z.enum(productStatuses),
   eligibleShapes: uniqueValues(z.enum(bodyShapes)),
   eligibleSeasons: uniqueValues(z.enum(colourSeasons)),
   garmentCategory: z.enum(garmentCategories),
   occasionTags: uniqueValues(z.enum(occasionTags)),
   priceTier: z.enum(priceTiers),
+  // Garment details for face and metal matching; null when not applicable.
+  neckline: z.enum(necklines).nullable().optional(),
+  pattern: z.enum(patterns).nullable().optional(),
+  drape: z.enum(drapes).nullable().optional(),
+  metal: z.enum(metals).nullable().optional(),
 };
 
 export const productInputSchema = z.object({
   ...productFields,
-  currency: productFields.currency.default("GBP"),
+  currency: productFields.currency.default("INR"),
   status: productFields.status.default("active"),
 });
 

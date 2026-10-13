@@ -1,18 +1,74 @@
 import { isColourSeason, type ColourSeason } from "../colour-season/map.ts";
+import type { Neckline } from "../catalogue/schema.ts";
+import { faceFit, faceGuidance, necklineFit, type GarmentDetails } from "../face-shape/guidance.ts";
+import { NECKLINE_LABELS } from "../labels.ts";
+import { preferredMetal } from "../style-guidance/metals.ts";
 
 export type RecommendationProfile = {
   /** Null when no measurements were given: selection uses season only. */
   bodyShape: string | null;
   colourSeason: string;
+  /** Face positions from a photo; null without one. */
+  faceLength?: number | null;
+  faceLines?: number | null;
+  temperature?: string | null;
 };
 
-export type RecommendationProduct = {
+export type RecommendationProduct = GarmentDetails & {
   id: string;
   brand: string;
   eligibleShapes: string[];
   eligibleSeasons: string[];
   priceTier: string;
+  garmentCategory?: string;
+  metal?: string | null;
 };
+
+// Pieces that finish an outfit rather than make one; an edit has at most one
+// until the catalogue is too thin to fill it otherwise.
+const FINISHING_CATEGORIES = new Set(["jewellery", "shoes", "accessories", "dupattas"]);
+const isFinishing = (product: RecommendationProduct) =>
+  FINISHING_CATEGORIES.has(product.garmentCategory ?? "");
+
+/**
+ * How well a product's neckline, print, fabric and metal suit the profile's
+ * face and colouring: positive suits, negative works against, 0 is neutral.
+ */
+export function styleFit(product: RecommendationProduct, profile: RecommendationProfile) {
+  let score = 0;
+  if (profile.faceLength != null && profile.faceLines != null) {
+    score += faceFit(product, { length: profile.faceLength, lines: profile.faceLines });
+  }
+  const metal = preferredMetal(profile.temperature ?? null);
+  if (metal && product.metal) score += product.metal === metal ? 1 : -1;
+  return score;
+}
+
+/** Short reasons a product suits the profile, strongest first. */
+export function styleFitReasons(
+  product: RecommendationProduct,
+  profile: RecommendationProfile,
+): string[] {
+  const reasons: string[] = [];
+  if (profile.faceLength != null && profile.faceLines != null) {
+    const face = { length: profile.faceLength, lines: profile.faceLines };
+    const guide = faceGuidance(face);
+    if (product.neckline && necklineFit(product.neckline as Neckline, face) > 0) {
+      reasons.push(`${NECKLINE_LABELS[product.neckline as Neckline]} for your face`);
+    }
+    if (guide.pattern && product.pattern === guide.pattern) {
+      reasons.push(guide.pattern === "floral" ? "Florals for your face" : "Geometric print for your face");
+    }
+    if (guide.drape && product.drape === guide.drape) {
+      reasons.push(guide.drape === "fluid" ? "Fluid drape for your face" : "Crisp fabric for your face");
+    }
+  }
+  const metal = preferredMetal(profile.temperature ?? null);
+  if (metal && product.metal === metal) {
+    reasons.push(metal === "gold" ? "Gold suits your colouring" : "Silver suits your colouring");
+  }
+  return reasons;
+}
 
 export function mondayUtc(date: Date): Date {
   const day = date.getUTCDay();
@@ -41,8 +97,12 @@ export function selectWeeklyProducts({
   weekStart: Date;
   count?: number;
 }): RecommendationProduct[] {
+  // Best style fit first, then a per-user, per-week shuffle. Every pool below
+  // keeps this order.
+  const fit = new Map(products.map((product) => [product.id, styleFit(product, profile)]));
   const active = [...products].sort(
     (left, right) =>
+      fit.get(right.id)! - fit.get(left.id)! ||
       stableHash(`${userId}:${weekStart.toISOString()}:${left.id}`) -
         stableHash(`${userId}:${weekStart.toISOString()}:${right.id}`) ||
       left.id.localeCompare(right.id),
@@ -112,6 +172,9 @@ export function selectWeeklyProducts({
         if (selected.length === count) return;
         if (selectedIds.has(product.id)) continue;
         if (enforceBrand && selectedBrands.has(normalizeBrand(product.brand))) {
+          continue;
+        }
+        if (enforceBrand && isFinishing(product) && selected.some(isFinishing)) {
           continue;
         }
         if (preferNewTier && selectedTiers.has(product.priceTier)) continue;

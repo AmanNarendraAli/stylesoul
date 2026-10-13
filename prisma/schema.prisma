@@ -65,6 +65,8 @@ model StyleProfile {
   value           String?
   chroma          String?
   contrast        String?
+  faceLength      Float? // 0–1 positions from lib/face-shape/measure.ts
+  faceLines       Float?
   detectionSource String
   analysisVersion Int      @default(1)
   updatedAt       DateTime @updatedAt
@@ -80,13 +82,17 @@ model Product {
   productUrl      String   @unique
   isAffiliate     Boolean  @default(false)
   priceCents      Int
-  currency        String   @default("GBP")
+  currency        String   @default("INR")
   status          String   @default("active")
   eligibleShapes  String[]
   eligibleSeasons String[]
   garmentCategory String
   occasionTags    String[]
   priceTier       String
+  neckline        String?
+  pattern         String?
+  drape           String?
+  metal           String?
   catalogueSource String?
   weeklyEditItems   WeeklyEditItem[]
   auditLogs         CatalogueAuditLog[]

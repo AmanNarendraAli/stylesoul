@@ -419,6 +419,29 @@ describe("analysis persistence", () => {
     expect(router.replace).toHaveBeenCalledWith("/profile");
   });
 
+  it("posts the photo's face measurements with the profile", async () => {
+    vi.useFakeTimers();
+    sessionStorage.setItem(
+      DRAFT_STORAGE_KEY,
+      JSON.stringify({ colouring, colouringSource: "photo", face: { length: 0.3, lines: 0.8 } }),
+    );
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue({ ok: true } as Response);
+
+    renderOnboarding(<OnboardingAnalysingPage />);
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toEqual({
+      ...colouring,
+      detectionSource: "photo",
+      faceLength: 0.3,
+      faceLines: 0.8,
+    });
+  });
+
   it("resumes a complete analysing draft and retries a failed save in place", async () => {
     vi.useFakeTimers();
     sessionStorage.setItem(

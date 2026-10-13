@@ -25,7 +25,7 @@ const product = {
   productUrl: "https://shop.example.com/dress",
   isAffiliate: false,
   priceCents: 8900,
-  currency: "GBP",
+  currency: "INR",
   status: "active",
   eligibleShapes: ["hourglass"],
   eligibleSeasons: ["cool_summer"],
@@ -111,7 +111,7 @@ describe("catalogue admin interactions", () => {
       document.getElementById(occasions.getAttribute("aria-describedby") ?? "")
         ?.textContent,
     ).toBe("Choose at least one");
-    const price = screen.getByRole("spinbutton", { name: "Price (GBP)" });
+    const price = screen.getByRole("spinbutton", { name: "Price (INR)" });
     expect(price.getAttribute("aria-invalid")).toBe("true");
     expect(
       document.getElementById(price.getAttribute("aria-describedby") ?? "")

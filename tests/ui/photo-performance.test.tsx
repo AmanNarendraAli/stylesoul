@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import OnboardingColouringPage from "@/app/(app)/onboarding/colouring/page";
 import { OnboardingProvider } from "@/app/(app)/onboarding/OnboardingProvider";
 import type { PhotoDetectionOutcome } from "@/components/onboarding/colour-detection-client";
+import { ONBOARDING_DRAFT_STORAGE_KEY } from "@/lib/onboarding-draft";
 
 const mocks = vi.hoisted(() => ({
   detectFromPhoto: vi.fn(),
@@ -175,6 +176,30 @@ describe("photo analysis progress", () => {
 });
 
 describe("photo pre-fill", () => {
+  it("keeps the photo's face measurements in the draft", async () => {
+    renderColouringPage();
+    await takePhoto();
+    detectionGate.resolve({
+      ok: true,
+      source: "photo",
+      face: { length: 0.3, lines: 0.8 },
+      detected: {
+        skinTone: { value: "medium", confidence: 0.9 },
+        undertone: { value: "warm", confidence: 0.9 },
+        eyeColour: { value: "hazel", confidence: 0.9 },
+        hairColour: { value: "black", confidence: 0.9 },
+      },
+    });
+    await screen.findByText(/We've filled these in from your photo/);
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await waitFor(() => {
+      const draft = JSON.parse(sessionStorage.getItem(ONBOARDING_DRAFT_STORAGE_KEY) ?? "{}");
+      expect(draft.face).toEqual({ length: 0.3, lines: 0.8 });
+    });
+  });
+
   it("names the groups the photo couldn't fill and moves to the swatches", async () => {
     renderColouringPage();
     await takePhoto();

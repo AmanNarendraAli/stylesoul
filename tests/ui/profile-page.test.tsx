@@ -113,6 +113,48 @@ describe("profile style guide", () => {
   });
 });
 
+describe("profile face guide and metals", () => {
+  it("shows metals for the colouring in the colour guide", async () => {
+    render(await ProfilePage());
+
+    expect(screen.getByRole("heading", { name: "Metals" })).toBeTruthy();
+    expect(screen.getByText("Yellow gold")).toBeTruthy();
+    expect(screen.getByText("Polished brass")).toBeTruthy();
+  });
+
+  it("invites a photo when there are no face measurements", async () => {
+    render(await ProfilePage());
+
+    expect(screen.queryByRole("heading", { name: "Your face guide" })).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "Take a photo" }).getAttribute("href"),
+    ).toBe("/onboarding/colouring?edit=1");
+  });
+
+  it("shows face spectrums, necklines, prints and fabrics from the photo", async () => {
+    mocks.findStyleProfile.mockResolvedValue({
+      ...baseProfile,
+      faceLength: 0.1,
+      faceLines: 0.9,
+    });
+
+    render(await ProfilePage());
+
+    const reading = (label: string) =>
+      screen.getByText(label).closest("li")!.querySelector("p")!.textContent;
+    expect(screen.getByRole("heading", { name: "Your face guide" })).toBeTruthy();
+    expect(reading("Face length")).toBe("Face length:Compact");
+    expect(reading("Lines")).toBe("Lines:Straight");
+    expect(screen.getByText("V neck")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Necklines to skip" })).toBeTruthy();
+    expect(screen.getByText("Stripes, checks and ikat")).toBeTruthy();
+    expect(screen.getByText(/Crisp fabrics that hold a line/)).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Retake photo" }).getAttribute("href"),
+    ).toBe("/onboarding/colouring?edit=1");
+  });
+});
+
 describe("profile without measurements", () => {
   it("shows colour guidance and invites measurements instead of shape guidance", async () => {
     mocks.findStyleProfile.mockResolvedValue({

@@ -42,7 +42,7 @@ const input = {
   imageUrl: "https://images.example.com/dress.jpg",
   productUrl: "https://shop.example.com/dress",
   priceCents: 8900,
-  currency: "GBP" as const,
+  currency: "INR" as const,
   status: "active" as const,
   eligibleShapes: ["hourglass" as const],
   eligibleSeasons: ["cool_summer" as const],

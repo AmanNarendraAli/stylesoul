@@ -52,15 +52,9 @@ try {
       const result = await checkProductUrl(product.productUrl);
       state = result.state;
       if (state !== "on_sale") {
-        report(
-          state,
-          product,
-          result.finalUrl === product.productUrl
-            ? `HTTP ${result.httpStatus} ${product.productUrl}`
-            : `${product.productUrl} -> ${result.finalUrl}`,
-        );
+        report(state, product, `HTTP ${result.httpStatus} ${product.productUrl}`);
       }
-      if (state === "off_sale" || state === "redirected_offsale") {
+      if (state === "off_sale" || state === "not_found") {
         offSale.push(product);
       }
     } catch (error) {
@@ -97,7 +91,7 @@ try {
 }
 
 async function checkImage(url: string) {
-  const width = Number(url.match(/\/w_(\d+)[,/]/)?.[1]);
+  const width = Number(new URL(url).searchParams.get("width"));
   try {
     const response = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
     await response.body?.cancel();

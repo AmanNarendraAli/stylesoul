@@ -5,6 +5,7 @@
  */
 import type { RgbaImage } from "@/lib/colour-detection/crops";
 import type { DetectedColouring, Embeddings } from "@/lib/colour-detection/detect";
+import type { FaceShape } from "@/lib/face-shape/measure";
 import type { HairMask, PixelSource, Point } from "@/lib/colour-detection/regions";
 import type {
   FaceLandmarker,
@@ -29,7 +30,13 @@ const EMBEDDER_URL =
   "https://storage.googleapis.com/mediapipe-models/image_embedder/mobilenet_v3_small/float32/1/mobilenet_v3_small.tflite";
 
 export type PhotoDetectionOutcome =
-  | { ok: true; detected: DetectedColouring; source: "photo" }
+  | {
+      ok: true;
+      detected: DetectedColouring;
+      /** Undefined when the pose or expression is unsuitable for measuring. */
+      face?: FaceShape;
+      source: "photo";
+    }
   | {
       ok: false;
       kind: "quality" | "unavailable" | "error";
@@ -59,6 +66,10 @@ export async function detectFromPhoto(file: File): Promise<PhotoDetectionOutcome
     const canvas = toCanvas(imageData);
     const faces = landmarker.detect(canvas).faceLandmarks ?? [];
     const landmarks = faces[0]?.map((p) => ({ x: p.x, y: p.y })) ?? [];
+    const face =
+      faces.length === 1
+        ? lib.measureFace(faces[0], imageData.width, imageData.height)
+        : undefined;
     const source = lib.pixelSourceFromRgba(imageData.data, imageData.width, imageData.height);
     const mask = segmenter ? hairMask(segmenter, canvas) : undefined;
 
@@ -73,7 +84,7 @@ export async function detectFromPhoto(file: File): Promise<PhotoDetectionOutcome
     if (!detection.ok) {
       return { ok: false, kind: "quality", message: detection.quality.message };
     }
-    return { ok: true, detected: detection.detected, source: "photo" };
+    return { ok: true, detected: detection.detected, face, source: "photo" };
   } catch {
     return {
       ok: false,
@@ -119,7 +130,8 @@ function loadPipeline() {
     import("@/lib/colour-detection/detect"),
     import("@/lib/colour-detection/crops"),
     import("@/lib/colour-detection/regions"),
-  ]).then(([detect, crops, regions]) => ({ ...detect, ...crops, ...regions }));
+    import("@/lib/face-shape/measure"),
+  ]).then(([detect, crops, regions, face]) => ({ ...detect, ...crops, ...regions, ...face }));
 }
 
 /** Embeds the same crops the classifier was trained on (see crops.ts). */

@@ -67,8 +67,9 @@ export default function LegalPage() {
               <li>
                 Profile data: height, optional weight, bust, waist, hip and
                 shoulder measurements; skin tone, undertone, eye and hair
-                selections; derived silhouette, colour season, detection source,
-                and analysis version.
+                selections; two face proportions (face length and jaw line)
+                measured from a photo; derived silhouette, colour season,
+                detection source, and analysis version.
               </li>
               <li>
                 Service records: the three products in each weekly edit and the
@@ -124,7 +125,9 @@ export default function LegalPage() {
               Photos are taken with the in-app camera and analysed only on the
               user&apos;s device. Live camera frames and the captured photo are
               never uploaded to StyleSoul, stored, or sent to an external vision
-              provider. If on-device analysis is unavailable, the user picks
+              provider. Only the resulting colouring picks and two face
+              proportions, each a number between 0 and 1, are saved to the
+              profile. If on-device analysis is unavailable, the user picks
               their colouring from manual swatches.
             </p>
           </LegalSection>

@@ -70,6 +70,12 @@ describe("capture guidance", () => {
     expect(reason(frame(), landmarks({ 1: { x: 0.5, y: 0.6 } }))).toBe("chin_down");
   });
 
+  it("asks for a closed mouth, since smiling changes the face outline", () => {
+    expect(
+      reason(frame(), landmarks({ 13: { x: 0.5, y: 0.63 }, 14: { x: 0.5, y: 0.66 } })),
+    ).toBe("mouth_open");
+  });
+
   it("gives opposite turn directions for opposite yaw", () => {
     const toImageRight = assessCaptureFrame(frame(), landmarks({ 1: { x: 0.56, y: 0.5 } }), 1);
     const toImageLeft = assessCaptureFrame(frame(), landmarks({ 1: { x: 0.44, y: 0.5 } }), 1);

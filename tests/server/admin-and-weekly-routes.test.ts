@@ -51,7 +51,7 @@ const validProduct = {
   imageUrl: "https://images.example.com/dress.jpg",
   productUrl: "https://shop.example.com/dress",
   priceCents: 8900,
-  currency: "GBP",
+  currency: "INR",
   status: "active",
   eligibleShapes: ["hourglass"],
   eligibleSeasons: ["cool_summer"],

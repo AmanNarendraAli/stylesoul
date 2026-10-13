@@ -6,6 +6,7 @@ import { isBodyShape } from "@/lib/body-shape/classify";
 import { isColourSeason } from "@/lib/colour-season/map";
 import { AccountDeletedError } from "@/lib/server/account-lifecycle";
 import { getAuthenticatedUserState } from "@/lib/server/auth";
+import { styleFitReasons } from "@/lib/recommendations/select";
 import { listActiveCatalogueProducts } from "@/lib/server/catalogue";
 import { findStyleProfile } from "@/lib/server/profile";
 import {
@@ -103,6 +104,7 @@ export default async function ProductsPage() {
                   key={product.id}
                   product={product}
                   season={season}
+                  reasons={profile ? styleFitReasons(product, profile) : []}
                 />
               ))}
             </div>

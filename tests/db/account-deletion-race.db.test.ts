@@ -163,7 +163,7 @@ describe.runIf(runDatabaseTests)("account deletion concurrency boundary", () => 
             imageUrl: "https://example.com/deletion-race.jpg",
             productUrl,
             priceCents: 100,
-            currency: "GBP",
+            currency: "INR",
             status: "inactive",
             eligibleShapes: ["hourglass"],
             eligibleSeasons: ["warm_autumn"],

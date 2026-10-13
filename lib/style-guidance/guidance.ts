@@ -405,7 +405,7 @@ export const shapeGuidance = {
   hourglass: {
     shapesToWear: {
       explainer: "Choose pieces that follow your waist, such as wrap styles and shaped jackets.",
-      examples: ["Wrap tops and dresses", "Shaped blazers", "Straight or gently flared trousers", "Bias-cut skirts"],
+      examples: ["Wrap and angrakha kurtas", "Fitted-waist anarkalis", "Sarees in fluid fabrics", "Shaped blazers", "Straight or gently flared trousers"],
     },
     accentShapesAndDetails: {
       explainer: "A belt or tie at your natural waist keeps your outline clear.",
@@ -413,41 +413,41 @@ export const shapeGuidance = {
     },
     shapesToAvoid: {
       explainer: "Boxy and dropped-waist cuts hide your waist, so belt them or pick shaped versions.",
-      examples: ["Oversized boxy jackets", "Dropped-waist dresses", "Very low-rise bottoms", "Unshaped tunics"],
+      examples: ["Boxy straight kurtas", "Kaftans without a waist", "Dropped-waist dresses", "Unshaped tunics"],
     },
   },
   triangle: {
     shapesToWear: {
       explainer: "Add structure on top and let skirts and trousers fall cleanly from the hip.",
-      examples: ["Boat or square-neck tops", "Structured shoulders", "A-line skirts", "Straight or wide-leg trousers"],
+      examples: ["A-line and anarkali kurtas", "Boat or square-neck tops", "Structured shoulders", "Straight pants or palazzos", "A-line skirts"],
     },
     accentShapesAndDetails: {
       explainer: "Put detail at the neckline and sleeves to draw the eye up.",
-      examples: ["Statement collars", "Sleeve volume", "Cropped structured jackets", "Necklace or scarf interest"],
+      examples: ["Embroidered yokes and necklines", "Statement collars", "Sleeve detail", "A detailed saree pallu and blouse"],
     },
     shapesToAvoid: {
       explainer: "Volume or bold detail at the hip makes it the focal point.",
-      examples: ["Large hip pockets", "Gathered hip peplums", "Strong horizontal hip stripes", "Very stiff hip volume"],
+      examples: ["Short kurtas over tight churidars", "Heavy hem or hip embroidery", "Large hip pockets", "Stiff flared skirts"],
     },
   },
   full_midsection: {
     shapesToWear: {
       explainer: "Choose open necklines and long, straight layers that skim your middle.",
-      examples: ["Open V-necks or scoop necks", "Longline cardigans", "Straight-leg trousers", "Softly structured shift dresses"],
+      examples: ["Long straight or A-line kurtas", "Open V-necks or scoop necks", "Empire-waist styles", "Kaftans", "Georgette or chiffon sarees"],
     },
     accentShapesAndDetails: {
       explainer: "Long necklaces and vertical seams draw the eye up and down.",
-      examples: ["Long pendant necklaces", "Vertical seam lines", "Tonal dressing", "Open-front layers"],
+      examples: ["Long pendant necklaces", "A dupatta worn long", "Vertical seam lines", "Tonal dressing"],
     },
     shapesToAvoid: {
       explainer: "Tight waistbands and clingy fabric draw attention to your middle.",
-      examples: ["Rigid waist-cinched tailoring", "High-contrast waistbands", "Very clingy jersey", "Bulky layers ending at the waist"],
+      examples: ["Belts at the waist", "Short crop blouses", "Peplums", "Very clingy jersey"],
     },
   },
   rectangle: {
     shapesToWear: {
       explainer: "Use belts, peplums and high waists to create a waistline.",
-      examples: ["Belted shirt dresses", "Peplum or curved-hem tops", "High-rise wide-leg trousers", "Tailored waistcoats"],
+      examples: ["Belted or peplum kurtas", "Angrakha kurtas with ties", "Anarkalis and shararas", "Crisp organza or cotton sarees", "High-rise wide-leg trousers"],
     },
     accentShapesAndDetails: {
       explainer: "Curved seams and tiered skirts add shape where you want it.",
@@ -455,21 +455,21 @@ export const shapeGuidance = {
     },
     shapesToAvoid: {
       explainer: "Long unbroken columns and loose, boxy layers can look shapeless.",
-      examples: ["Head-to-toe unbroken column", "Dropped-waist shifts", "Oversized matching separates", "Very long unstructured layers"],
+      examples: ["Long straight kurtas with no shaping", "Head-to-toe unbroken column", "Dropped-waist shifts", "Oversized matching separates"],
     },
   },
   inverted_triangle: {
     shapesToWear: {
       explainer: "Keep tops simple and add fullness with A-line skirts or wide trousers.",
-      examples: ["Open V-necks", "Simple knit tops", "A-line skirts", "Wide-leg or bootcut trousers"],
+      examples: ["Simple V or scoop necklines", "Anarkalis and flared kurtas", "Shararas and palazzos", "A-line skirts", "Crisp sarees"],
     },
     accentShapesAndDetails: {
       explainer: "Put pattern and texture below the waist to balance your shoulders.",
-      examples: ["Pleated trousers", "Patterned skirts", "Hip-level pockets", "Textured or tiered hems"],
+      examples: ["Embroidery at the hem", "Patterned skirts and pants", "Pleated trousers", "Textured or tiered hems"],
     },
     shapesToAvoid: {
       explainer: "Shoulder pads and wide necklines add width up top.",
-      examples: ["Shoulder pads", "Very wide boat necks", "Large upper-body ruffles", "Bright high-contrast shoulder details"],
+      examples: ["Puff sleeves", "Shoulder pads", "Wide boat necks", "Heavy embroidered yokes"],
     },
   },
 } satisfies Record<BodyShape, ShapeGuidance>;

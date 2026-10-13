@@ -36,7 +36,13 @@ export async function getOrCreateWeeklyEditForUser(
   const [profile, products, history] = await Promise.all([
     prisma.styleProfile.findUnique({
       where: { userId },
-      select: { bodyShape: true, colourSeason: true },
+      select: {
+        bodyShape: true,
+        colourSeason: true,
+        faceLength: true,
+        faceLines: true,
+        temperature: true,
+      },
     }),
     prisma.product.findMany({ where: { status: "active" } }),
     prisma.weeklyEditItem.findMany({

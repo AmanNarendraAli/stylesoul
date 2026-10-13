@@ -1,6 +1,9 @@
 import type { ColourSeason } from "@/lib/colour-season/map";
 import { SEASON_PALETTES } from "@/components/avatar/palettes";
-import { SEASON_LABELS } from "@/lib/labels";
+import { Check } from "lucide-react";
+import { formatPrice } from "@/lib/catalogue/price";
+import { CATEGORY_LABELS, SEASON_LABELS } from "@/lib/labels";
+import type { GarmentCategory } from "@/lib/catalogue/schema";
 
 export type RecommendationCardProduct = {
   id: string;
@@ -18,9 +21,12 @@ export type RecommendationCardProduct = {
 export function ProductCard({
   product,
   season,
+  reasons = [],
 }: {
   product: RecommendationCardProduct;
   season: ColourSeason | null;
+  /** Why it suits the face and colouring; the first two are shown. */
+  reasons?: string[];
 }) {
   return (
     <article className="group overflow-hidden rounded-xl border border-cream/15 bg-cream/[0.03]">
@@ -45,6 +51,19 @@ export function ProductCard({
             Suits {SEASON_LABELS[season]}
           </p>
         ) : null}
+        {reasons.length > 0 ? (
+          <ul className="mt-2 flex flex-wrap gap-2">
+            {reasons.slice(0, 2).map((reason) => (
+              <li
+                key={reason}
+                className="inline-flex items-center gap-1.5 rounded-full border border-cream/15 px-3 py-1 text-xs text-cream/80"
+              >
+                <Check aria-hidden="true" className="h-3 w-3 text-gold" />
+                {reason}
+              </li>
+            ))}
+          </ul>
+        ) : null}
         {product.description ? (
           <p className="mt-2 line-clamp-2 text-sm text-cream/65">
             {product.description}
@@ -53,13 +72,12 @@ export function ProductCard({
         <div className="mt-5 flex items-end justify-between gap-4">
           <div>
             <p className="font-semibold">
-              {new Intl.NumberFormat("en-GB", {
-                style: "currency",
-                currency: product.currency,
-              }).format(product.priceCents / 100)}
+              {formatPrice(product.priceCents, product.currency)}
             </p>
-            <p className="mt-1 text-xs capitalize text-cream/60">
-              {product.garmentCategory.replaceAll("_", " ")} · {product.priceTier}
+            <p className="mt-1 text-xs text-cream/60">
+              {CATEGORY_LABELS[product.garmentCategory as GarmentCategory] ??
+                product.garmentCategory}{" "}
+              · {product.priceTier.charAt(0).toUpperCase() + product.priceTier.slice(1)}
             </p>
           </div>
           <a

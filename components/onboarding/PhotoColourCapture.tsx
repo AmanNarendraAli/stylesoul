@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Camera } from "lucide-react";
 import type { DetectedColouring } from "@/lib/colour-detection/detect";
+import type { FaceShape } from "@/lib/face-shape/measure";
 import { CameraCapture } from "./CameraCapture";
 import { detectFromPhoto } from "./colour-detection-client";
 
@@ -23,7 +24,7 @@ export function PhotoColourCapture({
   onPhotoSelected,
   onPickManually,
 }: {
-  onDetected: (detected: DetectedColouring) => void;
+  onDetected: (detected: DetectedColouring, face?: FaceShape) => void;
   /**
    * Fired with the captured file before analysis so the parent can show a
    * transient, local-only preview. The file itself is never persisted here.
@@ -56,7 +57,7 @@ export function PhotoColourCapture({
     const outcome = await detectFromPhoto(file);
     if (outcome.ok) {
       setStatus({ kind: "idle" });
-      onDetected(outcome.detected);
+      onDetected(outcome.detected, outcome.face);
     } else {
       setStatus({ kind: "error", message: outcome.message });
     }

@@ -47,7 +47,7 @@ const products = ["a", "b", "c", "d"].map((id, index) => ({
   productUrl: `https://shop.example.com/${id}`,
   isAffiliate: false,
   priceCents: 5000 + index * 1000,
-  currency: "GBP",
+  currency: "INR",
   status: "active",
   eligibleShapes: ["hourglass"],
   eligibleSeasons: ["warm_spring"],

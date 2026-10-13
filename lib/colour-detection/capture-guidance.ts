@@ -30,6 +30,7 @@ export type CaptureIssueReason =
   | "head_tilted"
   | "chin_up"
   | "chin_down"
+  | "mouth_open"
   | "too_dark"
   | "too_bright"
   | "uneven_light"
@@ -45,6 +46,8 @@ const FOREHEAD = 10;
 const CHIN = 152;
 const EYE_OUTER_LEFT = 33;
 const EYE_OUTER_RIGHT = 263;
+const LIP_UPPER = 13;
+const LIP_LOWER = 14;
 
 const MIN_FACE_WIDTH = 0.3; // face narrower than this fraction of the frame → too few skin pixels
 const MAX_FACE_WIDTH = 0.75; // wider than this and the face edges and hair fall out of frame
@@ -53,6 +56,7 @@ const MAX_YAW = 0.1; // nose offset from the cheek midpoint, as a fraction of fa
 const MAX_ROLL_DEG = 10; // eye-corner line angle from horizontal
 const MIN_NOSE_DROP = 0.44; // nose tip position between forehead (0) and chin (1); below → chin up
 const MAX_NOSE_DROP = 0.6; // above → chin down
+const MAX_MOUTH_GAP = 0.05; // lip gap over face width; an open mouth changes the face outline (see lib/face-shape/measure.ts)
 const MIN_SKIN_L = 20; // a little stricter than the quality gate (15) so captures clear it
 const MAX_SKIN_L = 90; // a little stricter than the quality gate (95)
 const MAX_CHEEK_L_DIFF = 12; // L* gap between cheeks that signals side lighting
@@ -123,6 +127,15 @@ export function assessCaptureFrame(
   }
   if (noseDrop > MAX_NOSE_DROP) {
     return issue("chin_down", "Lift your chin slightly.");
+  }
+
+  const mouthGap =
+    Math.hypot(
+      (landmarks[LIP_UPPER].x - landmarks[LIP_LOWER].x) * source.width,
+      (landmarks[LIP_UPPER].y - landmarks[LIP_LOWER].y) * source.height,
+    ) / width;
+  if (mouthGap >= MAX_MOUTH_GAP) {
+    return issue("mouth_open", "Close your mouth and relax your face.");
   }
 
   const skinL = medianL(sampleSkin(source, landmarks));

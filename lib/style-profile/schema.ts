@@ -21,10 +21,13 @@ export function hasMeasurements<T extends Partial<BodyMeasurements>>(
   return requiredMeasurementKeys.every((key) => input[key] !== undefined);
 }
 
+const facePosition = z.number().min(0).max(1).optional();
+
 /**
  * Colouring is required. Bust, waist and hips come together or not at all;
  * height and shoulder width are optional extras alongside them. Weight is no
- * longer collected but older clients may still send it.
+ * longer collected but older clients may still send it. Face positions come
+ * from a photo, both or neither; without them a saved face is kept.
  */
 export const styleProfileInputSchema = bodyMeasurementsSchema
   .partial()
@@ -32,6 +35,8 @@ export const styleProfileInputSchema = bodyMeasurementsSchema
   .extend({
     weightKg: optionalMeasurement("weight", 35, 250, "kg"),
     detectionSource: z.enum(detectionSources).default("manual"),
+    faceLength: facePosition,
+    faceLines: facePosition,
   })
   .superRefine((input, ctx) => {
     const anyMeasurement = [
@@ -43,6 +48,9 @@ export const styleProfileInputSchema = bodyMeasurementsSchema
         code: "custom",
         message: "Enter your bust, waist and hips together, or no measurements.",
       });
+    }
+    if ((input.faceLength === undefined) !== (input.faceLines === undefined)) {
+      ctx.addIssue({ code: "custom", message: "Send both face positions or neither." });
     }
   });
 

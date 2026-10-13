@@ -5,13 +5,16 @@ import { Avatar } from "@/components/avatar/Avatar";
 import { isBodyShape, type BodyShape } from "@/lib/body-shape/classify";
 import {
   isColourSeason,
+  type Chroma,
   type ColourSeason,
   type EyeColour,
   type HairColour,
   type SkinTone,
+  type Temperature,
   type Undertone,
 } from "@/lib/colour-season/map";
 import { ColourSpectrums } from "@/components/profile/ColourSpectrums";
+import { FaceGuide } from "@/components/profile/FaceGuide";
 import {
   eyeOptions,
   hairOptions,
@@ -28,6 +31,7 @@ import {
   shapeGuidance,
   type GuidanceSwatch,
 } from "@/lib/style-guidance/guidance";
+import { metalGuidance } from "@/lib/style-guidance/metals";
 import { createClient } from "@/lib/supabase/server";
 
 const primaryLink =
@@ -118,6 +122,14 @@ export default async function ProfilePage() {
   const shape = profile.bodyShape as BodyShape | null;
   const season = profile.colourSeason as ColourSeason;
   const colourGuide = colourGuidance[season];
+  const metals = metalGuidance(
+    profile.temperature as Temperature,
+    profile.chroma as Chroma,
+  );
+  const face =
+    profile.faceLength != null && profile.faceLines != null
+      ? { length: profile.faceLength, lines: profile.faceLines }
+      : null;
   const shapeGuide = shape ? shapeGuidance[shape] : null;
 
   const colourCategories = [
@@ -202,8 +214,62 @@ export default async function ProfilePage() {
                 </ul>
               </div>
             ))}
+
+            <div>
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-4">
+                <h3 className="shrink-0 font-display text-xl">Metals</h3>
+                <p className="text-sm text-cream/65">{metals.explainer}</p>
+              </div>
+              <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-3">
+                {metals.finishes.map((finish) => (
+                  <li
+                    key={finish.name}
+                    className="flex w-16 flex-col items-center gap-1.5 text-center"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="h-12 w-12 rounded-full border border-cream/15"
+                      style={{
+                        background: `radial-gradient(circle at 32% 28%, ${finish.from}, ${finish.to} 75%)`,
+                      }}
+                    />
+                    <span className="text-[11px] leading-tight text-cream/70">
+                      {finish.name}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </section>
+
+        {face ? (
+          <section
+            aria-labelledby="face-guide-heading"
+            className="mt-10 rounded-lg border border-cream/15 bg-cream/[0.03] p-6 sm:p-10"
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-4">
+              <h2 id="face-guide-heading" className="font-display text-3xl">
+                Your face guide
+              </h2>
+              <Link href={EDIT_COLOURS_HREF} className={secondaryLink}>
+                Retake photo
+              </Link>
+            </div>
+            <FaceGuide face={face} skinHex={skinHex ?? "#C8BEB3"} />
+          </section>
+        ) : (
+          <section className="mt-10 rounded-lg border border-cream/15 bg-cream/[0.03] p-6">
+            <h2 className="font-display text-2xl">Add a photo for your face guide</h2>
+            <p className="mt-2 max-w-2xl text-sm text-cream/65">
+              We measure your face from a photo to suggest necklines, prints
+              and fabrics.
+            </p>
+            <Link href={EDIT_COLOURS_HREF} className={`mt-4 ${secondaryLink}`}>
+              Take a photo
+            </Link>
+          </section>
+        )}
 
         {shape && shapeGuide ? (
           <section
@@ -259,7 +325,7 @@ export default async function ProfilePage() {
           <section className="mt-10 rounded-lg border border-cream/15 bg-cream/[0.03] p-6">
             <h2 className="font-display text-2xl">Add your measurements</h2>
             <p className="mt-2 max-w-2xl text-sm text-cream/65">
-              Your guide uses your colouring for now. Add a few measurements and
+              We don&apos;t know your shape yet. Add a few measurements and
               we&apos;ll show you which cuts suit you and use them in your weekly
               picks.
             </p>

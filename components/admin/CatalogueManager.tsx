@@ -5,6 +5,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { flushSync } from "react-dom";
 import { bodyShapes } from "@/lib/body-shape/classify";
 import { colourSeasons } from "@/lib/colour-season/map";
+import { formatPrice } from "@/lib/catalogue/price";
 import { SEASON_LABELS, SHAPE_LABELS } from "@/lib/labels";
 import {
   garmentCategories,
@@ -104,7 +105,7 @@ export function CatalogueManager({
       imageUrl: String(form.get("imageUrl")),
       productUrl: String(form.get("productUrl")),
       priceCents: Math.round(Number(form.get("price")) * 100),
-      currency: "GBP",
+      currency: "INR",
       status: String(form.get("status")),
       eligibleShapes: form.getAll("eligibleShapes").map(String),
       eligibleSeasons: form.getAll("eligibleSeasons").map(String),
@@ -282,10 +283,10 @@ export function CatalogueManager({
               <div className="grid gap-4 sm:grid-cols-2">
                 <TextField
                   name="price"
-                  label="Price (GBP)"
+                  label="Price (INR)"
                   type="number"
-                  step="0.01"
-                  min="0.01"
+                  step="1"
+                  min="1"
                   defaultValue={editing ? String(editing.priceCents / 100) : undefined}
                   error={fieldErrors.price}
                 />
@@ -373,7 +374,7 @@ export function CatalogueManager({
                     <div>
                       <p className="font-semibold">{product.brand} · {product.title}</p>
                       <p className="mt-1 text-sm text-cream/60">
-                        £{(product.priceCents / 100).toFixed(2)} · {product.status}
+                        {formatPrice(product.priceCents, product.currency)} · {product.status}
                       </p>
                     </div>
                     <button

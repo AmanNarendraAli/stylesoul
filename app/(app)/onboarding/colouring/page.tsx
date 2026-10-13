@@ -14,6 +14,7 @@ import {
   type ColourOption,
 } from "@/lib/colour-season/options";
 import type { DetectedColouring } from "@/lib/colour-detection/detect";
+import type { FaceShape } from "@/lib/face-shape/measure";
 import { Button } from "@/components/ui/button";
 import { OnboardingProgress } from "@/components/onboarding/OnboardingProgress";
 import { PhotoColourCapture } from "@/components/onboarding/PhotoColourCapture";
@@ -39,6 +40,7 @@ export default function OnboardingColouringPage() {
   const { draft, isHydrated, setColouring, setColouringSelections } =
     useOnboarding();
   const detectedRef = useRef<DetectedColouring | null>(null);
+  const faceRef = useRef<FaceShape | undefined>(undefined);
   const manuallySelectedRef = useRef<Set<keyof Colouring>>(new Set());
   const [showDetectedBanner, setShowDetectedBanner] = useState(false);
   // Values the photo filled in, cleared per group once the user picks.
@@ -85,8 +87,9 @@ export default function OnboardingColouringPage() {
   const selectedEye = watch("eyeColour");
   const selectedHair = watch("hairColour");
 
-  const handleDetected = (detected: DetectedColouring) => {
+  const handleDetected = (detected: DetectedColouring, face?: FaceShape) => {
     detectedRef.current = detected;
+    faceRef.current = face;
     const filled: Partial<Colouring> = {};
     for (const name of Object.keys(GROUP_NAMES) as (keyof Colouring)[]) {
       const value = detected[name]?.value;
@@ -132,6 +135,7 @@ export default function OnboardingColouringPage() {
         draft.colouringSource,
         draft.colouring,
       ),
+      faceRef.current,
     );
     router.push(isEdit ? "/onboarding/analysing?edit=1" : "/onboarding/body");
   };

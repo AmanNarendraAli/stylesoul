@@ -10,7 +10,7 @@ const product = {
   imageUrl: "https://images.example.com/shirt.jpg",
   productUrl: "https://shop.example.com/shirt",
   priceCents: 4500,
-  currency: "GBP",
+  currency: "INR",
   garmentCategory: "tops",
   priceTier: "mid",
 };
@@ -23,6 +23,21 @@ describe("weekly edit product card", () => {
 
     expect(screen.getByRole("img", { name: "Linen shirt" })).toBeTruthy();
     expect(screen.getByText("Suits Soft autumn")).toBeTruthy();
+  });
+
+  it("shows the price in rupees and up to two reasons it suits you", () => {
+    render(
+      <ProductCard
+        product={{ ...product, priceCents: 249900 }}
+        season="soft_autumn"
+        reasons={["V neck for your face", "Gold suits your colouring", "Crisp fabric for your face"]}
+      />,
+    );
+
+    expect(screen.getByText("₹2,499")).toBeTruthy();
+    expect(screen.getByText("V neck for your face")).toBeTruthy();
+    expect(screen.getByText("Gold suits your colouring")).toBeTruthy();
+    expect(screen.queryByText("Crisp fabric for your face")).toBeNull();
   });
 
   it("leaves out the season chip when the season is unknown", () => {

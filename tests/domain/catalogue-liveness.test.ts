@@ -1,116 +1,76 @@
 // @vitest-environment node
-import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import { checkProductUrl, parseProductPage } from "@/lib/catalogue/liveness";
+import { checkProductUrl, parseProductJson } from "@/lib/catalogue/liveness";
 
-const fixture = (name: string) =>
-  readFileSync(
-    new URL(`../fixtures/catalogue/${name}.html`, import.meta.url),
-    "utf8",
-  );
+const PRODUCT_URL = "https://okhai.org/products/dabu-cotton-ajrakh-kurta-pant-set";
+const VARIANT_URL = "https://www.janasya.com/products/navy-a-line-kurta?variant=22";
 
-const PRODUCT_URL =
-  "https://www.marksandspencer.com/pure-cotton-longline-trench-coat/p/clp60779115";
-const OFFSALE_URL =
-  "https://www.marksandspencer.com/l/women/dresses/mini-dresses#intid=offsale-redirect_P60786449_T429872W";
+const product = (variants: Array<{ id: number; available: boolean; price: number }>) =>
+  JSON.stringify({ title: "Dabu Cotton Ajrakh Kurta Pant Set", variants });
 
-describe("parseProductPage", () => {
-  it("reads an on-sale product's title, lowest price and in-stock colours", () => {
-    expect(parseProductPage(fixture("ms-on-sale"), PRODUCT_URL)).toEqual({
+describe("parseProductJson", () => {
+  it("reads the title and the lowest available price in rupees", () => {
+    const body = product([
+      { id: 11, available: true, price: 720000 },
+      { id: 12, available: true, price: 650000 },
+      { id: 13, available: false, price: 500000 },
+    ]);
+
+    expect(parseProductJson(body, PRODUCT_URL)).toEqual({
       state: "on_sale",
-      title: "The Trench",
-      price: 95,
-      colours: ["LIGHT CARAMEL", "BLACK"],
+      title: "Dabu Cotton Ajrakh Kurta Pant Set",
+      price: 6500,
     });
   });
 
-  it("treats a 200 product page flagged off sale as off sale", () => {
-    expect(parseProductPage(fixture("ms-off-sale"), PRODUCT_URL)).toEqual({
-      state: "off_sale",
-      title: "Pure Cotton Lace Insert Beach Dresses",
-    });
+  it("is off sale once no variant is available", () => {
+    const body = product([{ id: 11, available: false, price: 720000 }]);
+
+    expect(parseProductJson(body, PRODUCT_URL).state).toBe("off_sale");
   });
 
-  it("lists only colours with stock, and is off sale once nothing is in stock", () => {
-    const soldOut = (colours: string[]) =>
-      fixture("ms-on-sale").replace(
-        /"colour": "([^"]+)",\s*"skus": \[[\s\S]*?\n {6}\]/g,
-        (variant, colour: string) =>
-          colours.includes(colour)
-            ? variant.replace(/"quantity": \d+/g, '"quantity": 0')
-            : variant,
-      );
+  it("checks only the variant pinned in the product URL", () => {
+    const body = product([
+      { id: 21, available: true, price: 129900 },
+      { id: 22, available: false, price: 129900 },
+    ]);
 
-    expect(parseProductPage(soldOut(["BLACK"]), PRODUCT_URL)).toMatchObject({
-      state: "on_sale",
-      colours: ["LIGHT CARAMEL"],
-    });
-    expect(
-      parseProductPage(soldOut(["BLACK", "LIGHT CARAMEL"]), PRODUCT_URL).state,
-    ).toBe("off_sale");
+    expect(parseProductJson(body, VARIANT_URL).state).toBe("off_sale");
+    expect(parseProductJson(body, VARIANT_URL.replace("=22", "=21")).state).toBe("on_sale");
   });
 
-  it("recognises the off-sale redirect marker in the final URL", () => {
-    expect(parseProductPage(fixture("ms-category"), OFFSALE_URL)).toEqual({
-      state: "redirected_offsale",
-    });
-  });
-
-  it("reports pages without product data as not a product", () => {
-    const categoryUrl = OFFSALE_URL.split("#")[0];
-    expect(parseProductPage(fixture("ms-category"), categoryUrl).state).toBe(
+  it("reports responses without product data as not a product", () => {
+    expect(parseProductJson("<html>Access denied</html>", PRODUCT_URL).state).toBe(
       "not_a_product",
     );
-    expect(parseProductPage("<html>Access denied</html>", PRODUCT_URL).state).toBe(
-      "not_a_product",
-    );
+    expect(parseProductJson("{}", PRODUCT_URL).state).toBe("not_a_product");
   });
 });
 
 describe("checkProductUrl", () => {
-  it("returns the parsed page with its final URL and status", async () => {
-    const fetchImpl = vi.fn(async () => new Response(fixture("ms-on-sale")));
+  it("fetches the product's .js data without the query string", async () => {
+    const fetchImpl = vi.fn(
+      async () => new Response(product([{ id: 22, available: true, price: 129900 }])),
+    );
 
-    await expect(checkProductUrl(PRODUCT_URL, fetchImpl)).resolves.toMatchObject({
+    await expect(checkProductUrl(VARIANT_URL, fetchImpl)).resolves.toEqual({
       state: "on_sale",
-      title: "The Trench",
-      finalUrl: PRODUCT_URL,
+      title: "Dabu Cotton Ajrakh Kurta Pant Set",
+      price: 1299,
       httpStatus: 200,
     });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://www.janasya.com/products/navy-a-line-kurta.js",
+      expect.anything(),
+    );
   });
 
-  it("follows redirects and keeps the off-sale marker from the Location header", async () => {
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) =>
-      String(input) === PRODUCT_URL
-        ? new Response(null, {
-            status: 308,
-            headers: {
-              location:
-                "/l/women/dresses/mini-dresses#intid=offsale-redirect_P60786449_T429872W",
-            },
-          })
-        : new Response(fixture("ms-category")),
-    );
+  it("treats a 404 as a removed product", async () => {
+    const fetchImpl = vi.fn(async () => new Response("Not found", { status: 404 }));
 
     await expect(checkProductUrl(PRODUCT_URL, fetchImpl)).resolves.toEqual({
-      state: "redirected_offsale",
-      finalUrl: OFFSALE_URL,
-      httpStatus: 200,
-    });
-  });
-
-  it("detects an off-sale product reached through a redirect", async () => {
-    const movedUrl =
-      "https://www.marksandspencer.com/textured-round-neck-midi-bodycon-dress/p/clp61225770";
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) =>
-      String(input) === PRODUCT_URL
-        ? new Response(null, { status: 308, headers: { location: movedUrl } })
-        : new Response(fixture("ms-off-sale")),
-    );
-
-    await expect(checkProductUrl(PRODUCT_URL, fetchImpl)).resolves.toMatchObject({
-      state: "off_sale",
-      finalUrl: movedUrl,
+      state: "not_found",
+      httpStatus: 404,
     });
   });
 });

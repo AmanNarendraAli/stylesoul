@@ -4,6 +4,9 @@ import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import type { BodyShape } from "@/lib/body-shape/classify";
 import type { ColourSeason } from "@/lib/colour-season/map";
+import { formatPrice } from "@/lib/catalogue/price";
+import type { GarmentCategory } from "@/lib/catalogue/schema";
+import { CATEGORY_LABELS } from "@/lib/labels";
 import {
   sortCatalogueProducts,
   type CatalogueSortDirection,
@@ -51,7 +54,10 @@ export function ProductCatalogue({
   const [onlySuitsMe, setOnlySuitsMe] = useState(season !== null);
   const [category, setCategory] = useState(ALL_CATEGORIES);
   const categories = useMemo(
-    () => [...new Set(products.map((product) => product.garmentCategory))].sort(),
+    () =>
+      [...new Set(products.map((product) => product.garmentCategory))].sort((a, b) =>
+        categoryLabel(a).localeCompare(categoryLabel(b)),
+      ),
     [products],
   );
   const sortedProducts = useMemo(
@@ -199,9 +205,12 @@ function suits(
   );
 }
 
+function capitalise(text: string) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 function categoryLabel(value: string) {
-  const label = value.replaceAll("_", " ");
-  return label.charAt(0).toUpperCase() + label.slice(1);
+  return CATEGORY_LABELS[value as GarmentCategory] ?? value;
 }
 
 function CatalogueProductCard({
@@ -234,10 +243,7 @@ function CatalogueProductCard({
               </h3>
             </div>
             <p className="shrink-0 text-lg font-semibold">
-              {new Intl.NumberFormat("en-GB", {
-                style: "currency",
-                currency: product.currency,
-              }).format(product.priceCents / 100)}
+              {formatPrice(product.priceCents, product.currency)}
             </p>
           </div>
 
@@ -264,8 +270,8 @@ function CatalogueProductCard({
         </div>
 
         <div className="mt-6 flex flex-wrap items-end justify-between gap-4 border-t border-cream/10 pt-4">
-          <p className="text-xs capitalize text-cream/55">
-            {product.garmentCategory.replaceAll("_", " ")} · {product.priceTier}
+          <p className="text-xs text-cream/55">
+            {categoryLabel(product.garmentCategory)} · {capitalise(product.priceTier)}
           </p>
           <a
             href={product.productUrl}

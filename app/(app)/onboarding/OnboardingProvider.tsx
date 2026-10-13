@@ -12,7 +12,9 @@ import {
   bodyMeasurementsSchema,
   type BodyMeasurements,
 } from "@/lib/body-shape/classify";
+import { z } from "zod";
 import { colouringSchema, type Colouring } from "@/lib/colour-season/map";
+import type { FaceShape } from "@/lib/face-shape/measure";
 import { detectionSources } from "@/lib/style-profile/schema";
 import { ONBOARDING_DRAFT_STORAGE_KEY as DRAFT_STORAGE_KEY } from "@/lib/onboarding-draft";
 
@@ -25,9 +27,15 @@ export type OnboardingDraft = {
   colouringSource?: DetectionSource;
   /** In-progress swatch picks, so a reload keeps them. */
   colouringSelections?: Partial<Colouring>;
+  /** Face positions from the photo, when one was taken and measurable. */
+  face?: FaceShape;
 };
 
 const colouringSelectionsSchema = colouringSchema.partial();
+const faceSchema = z.object({
+  length: z.number().min(0).max(1),
+  lines: z.number().min(0).max(1),
+});
 
 function parseDraft(candidate: unknown): OnboardingDraft {
   if (
@@ -44,6 +52,7 @@ function parseDraft(candidate: unknown): OnboardingDraft {
   const colouringSelections = colouringSelectionsSchema.safeParse(
     values.colouringSelections,
   );
+  const face = faceSchema.safeParse(values.face);
   const colouringSource = detectionSources.find(
     (source) => source === values.colouringSource,
   );
@@ -53,6 +62,7 @@ function parseDraft(candidate: unknown): OnboardingDraft {
   if (colouring.success) {
     draft.colouring = colouring.data;
     if (colouringSource) draft.colouringSource = colouringSource;
+    if (face.success) draft.face = face.data;
   }
   if (colouringSelections.success) {
     draft.colouringSelections = colouringSelections.data;
@@ -78,7 +88,8 @@ type OnboardingContextValue = {
   isHydrated: boolean;
   /** `undefined` skips measurements; they stay optional. */
   setBody: (body: BodyMeasurements | undefined) => void;
-  setColouring: (colouring: Colouring, source: DetectionSource) => void;
+  /** A new photo's face replaces the draft's; without one it is kept. */
+  setColouring: (colouring: Colouring, source: DetectionSource, face?: FaceShape) => void;
   setColouringSelections: (selections: Partial<Colouring>) => void;
   reset: () => void;
 };
@@ -134,8 +145,13 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   }, []);
 
   const setColouring = useCallback(
-    (colouring: Colouring, source: DetectionSource) => {
-      setDraft((prev) => ({ ...prev, colouring, colouringSource: source }));
+    (colouring: Colouring, source: DetectionSource, face?: FaceShape) => {
+      setDraft((prev) => ({
+        ...prev,
+        colouring,
+        colouringSource: source,
+        face: face ?? prev.face,
+      }));
     },
     [],
   );
